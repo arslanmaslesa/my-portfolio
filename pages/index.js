@@ -1,7 +1,9 @@
+// pages/index.tsx or index.jsx
 import Image from "next/image";
 import { Poppins } from 'next/font/google';
 import { useEffect, useState } from "react";
 import Navbar from '../components/Navbar';
+import Lenis from '@studio-freight/lenis';
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -13,6 +15,19 @@ export default function Home() {
   const [maxScale, setMaxScale] = useState(0.25);
 
   useEffect(() => {
+    const lenis = new Lenis({
+    duration: 1.15, // Adjust for scroll speed (higher = slower)
+    easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+    smooth: true,
+  });
+
+    function raf(time) {
+      lenis.raf(time);
+      requestAnimationFrame(raf);
+    }
+
+    requestAnimationFrame(raf);
+
     const updateMaxScale = () => {
       const maxWidth = window.innerWidth / 4;
       const initialWidth = window.innerWidth - 24;
@@ -35,6 +50,7 @@ export default function Home() {
     handleScroll();
 
     return () => {
+      lenis.destroy();
       window.removeEventListener("resize", updateMaxScale);
       window.removeEventListener("scroll", handleScroll);
     };
@@ -44,13 +60,12 @@ export default function Home() {
 
   return (
     <main className="bg-white min-h-[300vh] relative">
-      {/* Navbar */}
       <div className="fixed top-0 left-0 w-full z-[9999]">
         <Navbar />
       </div>
 
-      {/* Sticky GIF inside scrollable container */}
-      <div className="h-[192vh] px-3 relative z-30">
+      {/* Sticky GIF */}
+      <div className="h-[182vh] px-3 relative z-30">
         <div className="sticky top-3">
           <div
             className="rounded-[12px] overflow-hidden"
@@ -70,10 +85,9 @@ export default function Home() {
             </div>
           </div>
         </div>
-        
       </div>
 
-      {/* Top Text */}
+      {/* Floating Text */}
       <div
         className={`fixed top-0 left-0 w-full h-full z-40 flex justify-between items-center pointer-events-none ${poppins.className}`}
         style={{
@@ -91,12 +105,19 @@ export default function Home() {
       </div>
 
       {/* Tagline Section */}
-      <div className="mt-[-68vh] pl-3 pr-10 pb-20 z-10 absolute">
-        <p
-          className={`text-left text-[48px] font-medium text-gray-700 ${poppins.className} tracking-[-0.04em] leading-[58px]`}
+      <div className="relative mt-[-125vh] z-10">
+        <div
+          className="sticky top-0 pl-3 pb-20 bg-white pt-[calc(100vh-260px)]"
+          style={{ paddingRight: "calc(25vw + 0.75rem)" }}
         >
-          Sarajevo-based product designer, turning complex ideas into simple experiences.
-        </p>
+          <p
+            className={`text-left text-[48px] font-medium text-gray-700 ${poppins.className} tracking-[-0.04em] leading-[58px]`}
+          >
+            Sarajevo-based product designer, turning complex ideas into simple experiences.
+          </p>
+        </div>
+
+        {/* Scroll space */}
         <div className="h-[1200px]" />
       </div>
     </main>
