@@ -77,5 +77,6 @@ export default function Home() {
         <div className="h-[1200px]" />
       </div>
     </main>
+    
   );
 }
