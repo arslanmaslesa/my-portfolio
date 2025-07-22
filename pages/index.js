@@ -1,8 +1,7 @@
-import Image from "next/image";
-import { Poppins } from 'next/font/google';
 import { useEffect, useState, useRef } from "react";
 import Navbar from '../components/Navbar';
 import Lenis from '@studio-freight/lenis';
+import { Poppins } from 'next/font/google';
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -107,7 +106,7 @@ export default function Home() {
 
   // Fade to black effect per letter based on scrollY
   const getLetterColor = (index) => {
-    const fadeStart = 350;  // scrollY where fade starts
+    const fadeStart = 440;  // scrollY where fade starts
     const fadeDistance = 60; // pixels over which fade happens
     const relativeScroll = scrollY - fadeStart - index * 5;
 
@@ -143,23 +142,30 @@ export default function Home() {
         <Navbar />
       </div>
 
-      {/* Sticky GIF */}
-      <div className="h-[182vh] px-3 relative z-30">
+      {/* Sticky Video */}
+      <div className="h-[190vh] px-3 relative z-30">
         <div className="sticky top-3">
           <div
             className="rounded-[12px] overflow-hidden"
             style={{
               transform: `scale(${scale})`,
               transformOrigin: "top right",
-              transition: "transform 0.1s ease-out",
             }}
           >
-            <div className="relative w-full h-[calc(100vh-24px)]">
-              <Image
-                src="/hero1.gif"
+            <div className="relative w-full h-[calc(100vh-24px)] overflow-hidden rounded-[12px]">
+              <video
+                src="/hero1.mp4"
+                autoPlay
+                muted
+                loop
+                playsInline
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  display: 'block',
+                }}
                 alt="Hero background animation"
-                fill
-                className="object-cover"
               />
             </div>
           </div>
