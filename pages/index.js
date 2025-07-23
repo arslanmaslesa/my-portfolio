@@ -92,7 +92,7 @@ function HeroVideo({ scale }) {
 }
 
 export default function Home() {
-  const tagline = "Sarajevo-based product designer, turning complex ideas into simple experiences.";
+  const tagline = "Product designer based in Sarajevo, turning complex ideas into simple experiences.";
 
   const [scale, setScale] = useState(1);
   const [maxScale, setMaxScale] = useState(0.25);
