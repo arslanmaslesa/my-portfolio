@@ -38,7 +38,7 @@ export default function Navbar() {
         .nav-link:hover .nav-letter:nth-child(7) { animation-delay: 0.6s; }
       `}</style>
 
-      <div className="fixed top-3 left-0 w-full flex justify-center z-50">
+      <div className="fixed top-6 left-0 w-full flex justify-center z-50">
         <nav className="bg-black px-5 py-3 flex gap-8 rounded-md">
           {links.map(({ href, label }) => (
             <Link key={href} href={href} legacyBehavior>
