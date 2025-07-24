@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useRef } from "react";
 import Navbar from '../components/Navbar';
-import Lenis from '@studio-freight/lenis';
 import { Poppins } from 'next/font/google';
+import Image from 'next/image';
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -12,8 +12,15 @@ const poppins = Poppins({
 
 /* ------------------- Project Section ------------------- */
 const ProjectCard = ({ image, title }) => (
-  <div className="w-full h-full rounded-[12px] overflow-hidden bg-neutral-100">
-    <img src={image} alt={title} className="w-full h-full object-cover" />
+  <div className="relative w-full h-full rounded-[12px] overflow-hidden bg-neutral-100">
+    <Image
+      src={image}
+      alt={title}
+      fill
+      sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+      className="object-cover"
+      priority={false}
+    />
   </div>
 );
 
@@ -39,7 +46,7 @@ const ProjectSection = () => {
 /* ------------------- Hero Video ------------------- */
 const HeroVideo = ({ scale }) => (
   <div className="h-[190vh] relative z-30 px-3 2xl:px-6">
-    <div className="sticky top-3 2xl:top-6"> 
+    <div className="sticky top-3 2xl:top-6">
       <div
         className="rounded-[12px] overflow-hidden"
         style={{ transform: `scale(${scale})`, transformOrigin: "top right" }}
@@ -141,60 +148,75 @@ export default function Home() {
   const [scrollY, setScrollY] = useState(0);
   const [taglineHeight, setTaglineHeight] = useState(0);
   const [stickyTop, setStickyTop] = useState(0);
+  const [extra, setExtra] = useState(0); // 30vh for normal screens, 0 for tall
+  const [vh, setVh] = useState(0);
 
-  // Lenis + scale + sticky top computation
+  // Lenis + scroll/resize handling (client-only)
   useEffect(() => {
-    const lenis = new Lenis({
-      duration: 1.15,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      smooth: true,
-    });
+    let lenis;
 
-    const raf = (time) => {
-      lenis.raf(time);
+    const start = async () => {
+      const { default: Lenis } = await import('@studio-freight/lenis');
+
+      lenis = new Lenis({
+        duration: 1.15,
+        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        smooth: true,
+      });
+
+      const raf = (time) => {
+        lenis.raf(time);
+        requestAnimationFrame(raf);
+      };
       requestAnimationFrame(raf);
+
+      const handle = () => {
+        const y = window.scrollY;
+        const vw = window.innerWidth;
+        const _vh = window.innerHeight;
+        setVh(_vh);
+
+        const maxScale = (vw / 4) / (vw - 24);
+        setScale(Math.max(1 - y / 800, maxScale));
+        setScrollY(y);
+
+        // 30vh on normal screens, 0 on tall ones
+        const isTallScreen = _vh > vw * 1.2;
+        setExtra(isTallScreen ? 0 : _vh * 0.3);
+
+        if (taglineRef.current) {
+          const h = taglineRef.current.offsetHeight;
+          setTaglineHeight(h);
+          setStickyTop(Math.max(0, _vh - h - 60));
+        }
+      };
+
+      handle();
+      window.addEventListener("scroll", handle);
+      window.addEventListener("resize", handle);
+
+      return () => {
+        window.removeEventListener("scroll", handle);
+        window.removeEventListener("resize", handle);
+      };
     };
-    requestAnimationFrame(raf);
 
-    const handle = () => {
-      const y = window.scrollY;
-      const maxScale = (window.innerWidth / 4) / (window.innerWidth - 24);
-      setScale(Math.max(1 - y / 800, maxScale));
-      setScrollY(y);
-
-      if (taglineRef.current) {
-        const h = taglineRef.current.offsetHeight;
-        setTaglineHeight(h);
-        const vh = window.innerHeight;
-        // The top at which the sticky element should pin:
-        // viewport height - own height - 60 (bottom padding)
-        setStickyTop(Math.max(0, vh - h - 60));
-      }
-    };
-
-    handle();
-    window.addEventListener("scroll", handle);
-    window.addEventListener("resize", handle);
+    start();
 
     return () => {
-      lenis.destroy();
-      window.removeEventListener("scroll", handle);
-      window.removeEventListener("resize", handle);
+      if (lenis) lenis.destroy?.();
     };
   }, []);
 
-  // Heights for sticky/unstick logic (same idea as your original code)
+  // Fade / height logic (same behaviour as before)
   const FADE_START = 350;
   const FADE_DISTANCE = 60;
   const fadeEndScroll = FADE_START + FADE_DISTANCE + taglineText.length * 5;
 
-const isTallScreen = window.innerHeight > window.innerWidth * 1.2; // tweak factor
-const extra = isTallScreen ? 0 : window.innerHeight * 0.3;
-
-const containerHeight =
-  scrollY >= fadeEndScroll
-    ? `${fadeEndScroll + extra + taglineHeight}px`
-    : '200vh';
+  const computedHeight =
+    scrollY >= fadeEndScroll
+      ? fadeEndScroll + extra + taglineHeight
+      : (vh ? vh * 2 : 2000);
 
   return (
     <main className="bg-white min-h-[300vh] relative">
@@ -207,14 +229,14 @@ const containerHeight =
       <HeroVideo scale={scale} />
       <Tagline scale={scale} />
 
-      {/* Sarajevo tagline with dynamic sticky top and 60px bottom padding, pushed down by 50vh */}
+      {/* Sarajevo tagline with dynamic sticky top, initial push by 50vh */}
       <div
         className="relative z-10 mt-[-110vh] sm:mt-[-125vh] md:mt-[-125vh] lg:mt-[-125vh] bg-white px-3"
         style={{
-          height: containerHeight,
+          height: `${computedHeight}px`,
           paddingRight: "calc(25vw + 0.75rem)",
           transition: 'height 0.1s ease',
-          paddingTop: '50vh', // <--- push down initial position
+          paddingTop: '50vh',
         }}
       >
         <div className="sticky pb-[60px]" style={{ top: `${stickyTop}px` }}>
