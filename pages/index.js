@@ -48,7 +48,7 @@ const HeroVideo = ({ scale }) => (
   <div className="h-[190vh] relative z-30 px-3 2xl:px-6">
     <div className="sticky top-3 2xl:top-6">
       <div
-        className="rounded-[12px] overflow-hidden will-change-transform"
+        className="rounded-[12px] overflow-hidden"
         style={{ transform: `scale(${scale})`, transformOrigin: "top right" }}
       >
         <div className="relative w-full h-[calc(100vh-24px)] 2xl:h-[calc(100vh-48px)] overflow-hidden rounded-[12px]">
@@ -58,11 +58,7 @@ const HeroVideo = ({ scale }) => (
             muted
             loop
             playsInline
-            controls={false}
-            className="w-full h-full object-cover block pointer-events-none"
-            controlsList="nodownload nofullscreen noplaybackrate noremoteplayback"
-            disablePictureInPicture
-            onLoadedData={(e) => e.currentTarget.play()}
+            className="w-full h-full object-cover block"
           />
         </div>
       </div>
@@ -77,7 +73,7 @@ const Tagline = ({ scale }) => {
   return (
     <div
       className={`fixed top-0 left-0 w-full h-full z-40 pointer-events-none px-6.5 2xl:px-13 ${poppins.className}`}
-      style={{ opacity, transition: "opacity 0.3s ease-out", willChange: 'opacity' }}
+      style={{ opacity, transition: "opacity 0.3s ease-out" }}
     >
       <div className="flex flex-col md:flex-row h-full items-center justify-center md:justify-between">
         <p className="text-white text-[18px] 2xl:text-[32px] font-medium tracking-[-0.01em] text-center md:text-left md:w-1/2">
@@ -129,7 +125,7 @@ const SarajevoTagline = ({ text, scrollY, refObj }) => {
             return (
               <span
                 key={`${wIdx}-${cIdx}`}
-                style={{ color, transition: 'color 0.1s linear', display: 'inline-block', willChange: 'color' }}
+                style={{ color, transition: 'color 0.1s linear', display: 'inline-block' }}
               >
                 {ch}
               </span>
@@ -155,7 +151,6 @@ export default function Home() {
   const taglineHeightRef = useRef(0);
   const extraRef = useRef(0);
   const lenisRef = useRef(null); // StrictMode guard
-  const isTouchRef = useRef(false);
 
   // React state
   const [ui, setUi] = useState({
@@ -193,7 +188,7 @@ export default function Home() {
     return () => window.removeEventListener('resize', recomputeStaticThings);
   }, []);
 
-  // Lenis (desktop) / native (touch)
+  // Lenis
   useEffect(() => {
     if (lenisRef.current) return; // prevent double init in StrictMode
 
@@ -222,36 +217,13 @@ export default function Home() {
       rafId = null;
     };
 
-    const onNativeScroll = () => {
-      lastScrollYRef.current = window.scrollY || window.pageYOffset;
-      if (rafId === null) rafId = requestAnimationFrame(commitScrollState);
-    };
-
-    // detect touch (run after mount)
-    isTouchRef.current =
-      'ontouchstart' in window ||
-      (navigator.maxTouchPoints || 0) > 0 ||
-      (navigator.msMaxTouchPoints || 0) > 0;
-
-    if (isTouchRef.current) {
-      // Use native scroll path – no Lenis
-      window.addEventListener('scroll', onNativeScroll, { passive: true });
-      // kick first frame
-      onNativeScroll();
-
-      return () => {
-        window.removeEventListener('scroll', onNativeScroll);
-        if (rafId) cancelAnimationFrame(rafId);
-      };
-    }
-
-    // Desktop: use Lenis with smooth scrolling
     (async () => {
       const { default: Lenis } = await import('@studio-freight/lenis');
       const lenis = new Lenis({
         lerp: 0.05,
         smooth: true,
-        smoothTouch: false, // the requested fix
+        smoothWheel: true,
+        smoothTouch: true,
       });
 
       lenisRef.current = lenis;
@@ -288,7 +260,7 @@ export default function Home() {
       <HeroVideo scale={ui.scale} />
       <Tagline scale={ui.scale} />
 
-      {/* Sarajevo tagline with dynamic sticky top, initial push by 50vh */}
+      {/* Sarajevo tagline */}
       <div
         className="relative z-10 mt-[-110vh] sm:mt-[-125vh] md:mt-[-125vh] lg:mt-[-125vh] bg-white px-3"
         style={{
