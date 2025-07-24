@@ -46,7 +46,7 @@ const ProjectSection = () => {
 /* ------------------- Hero Video ------------------- */
 const HeroVideo = ({ scale }) => (
   <div className="h-[190vh] relative z-30 px-3 2xl:px-6">
-    <div className="sticky top-3 2xl:top-6">
+    <div className="sticky top-3 2xl:top-6" style={{ willChange: 'transform' }}>
       <div
         className="rounded-[12px] overflow-hidden"
         style={{ transform: `scale(${scale})`, transformOrigin: "top right" }}
@@ -220,10 +220,11 @@ export default function Home() {
     (async () => {
       const { default: Lenis } = await import('@studio-freight/lenis');
       const lenis = new Lenis({
-        lerp: 0.05,
+        lerp: 0.05,      // <-- Slower smoother scroll
         smooth: true,
         smoothWheel: true,
         smoothTouch: true,
+        // easing: t => t, // linear option if you want
       });
 
       lenisRef.current = lenis;
@@ -260,7 +261,7 @@ export default function Home() {
       <HeroVideo scale={ui.scale} />
       <Tagline scale={ui.scale} />
 
-      {/* Sarajevo tagline */}
+      {/* Sarajevo tagline with dynamic sticky top, initial push by 50vh */}
       <div
         className="relative z-10 mt-[-110vh] sm:mt-[-125vh] md:mt-[-125vh] lg:mt-[-125vh] bg-white px-3"
         style={{
