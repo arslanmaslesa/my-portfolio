@@ -46,7 +46,7 @@ const ProjectSection = () => {
 /* ------------------- Hero Video ------------------- */
 const HeroVideo = ({ scale }) => (
   <div className="h-[190vh] relative z-30 px-3 2xl:px-6">
-    <div className="sticky top-3 2xl:top-6">
+    <div className="sticky top-3 2xl:top-6" style={{ willChange: 'transform' }}>
       <div
         className="rounded-[12px] overflow-hidden"
         style={{ transform: `scale(${scale})`, transformOrigin: "top right" }}
@@ -144,24 +144,96 @@ export default function Home() {
 
   const taglineRef = useRef(null);
 
-  const [scale, setScale] = useState(1);
-  const [scrollY, setScrollY] = useState(0);
-  const [taglineHeight, setTaglineHeight] = useState(0);
-  const [stickyTop, setStickyTop] = useState(0);
-  const [extra, setExtra] = useState(0); // 30vh for normal screens, 0 for tall
-  const [vh, setVh] = useState(0);
+  // Refs (no re-render)
+  const lastScrollYRef = useRef(0);
+  const vwRef = useRef(0);
+  const vhRef = useRef(0);
+  const taglineHeightRef = useRef(0);
+  const extraRef = useRef(0);
+  const lenisRef = useRef(null); // StrictMode guard
 
-  // Lenis + scroll/resize handling (client-only)
+  // React state
+  const [ui, setUi] = useState({
+    scale: 1,
+    scrollY: 0,
+    stickyTop: 0,
+    computedHeight: 2000,
+  });
+
+  const FADE_START = 350;
+  const FADE_DISTANCE = 60;
+  const fadeEndScroll = FADE_START + FADE_DISTANCE + taglineText.length * 5;
+
+  // Measure stuff
   useEffect(() => {
-    let lenis;
+    const recomputeStaticThings = () => {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
 
-    const start = async () => {
+      vwRef.current = vw;
+      vhRef.current = vh;
+
+      const isTallScreen = vh > vw * 1.2;
+      extraRef.current = isTallScreen ? 0 : vh * 0.3;
+
+      if (taglineRef.current) {
+        taglineHeightRef.current = taglineRef.current.offsetHeight;
+        const stickyTop = Math.max(0, vh - taglineHeightRef.current - 60);
+        setUi(prev => ({ ...prev, stickyTop }));
+      }
+    };
+
+    recomputeStaticThings();
+    window.addEventListener('resize', recomputeStaticThings);
+    return () => window.removeEventListener('resize', recomputeStaticThings);
+  }, []);
+
+  // Lenis
+  useEffect(() => {
+    if (lenisRef.current) return; // prevent double init in StrictMode
+
+    let rafId = null;
+
+    const commitScrollState = () => {
+      const y = lastScrollYRef.current;
+      const vw = vwRef.current;
+      const vh = vhRef.current;
+
+      const maxScale = (vw / 4) / (vw - 24);
+      const scale = Math.max(1 - y / 800, maxScale);
+
+      const computedHeight =
+        y >= fadeEndScroll
+          ? fadeEndScroll + extraRef.current + taglineHeightRef.current
+          : vh ? vh * 2 : 2000;
+
+      setUi(prev => ({
+        ...prev,
+        scale,
+        scrollY: y,
+        computedHeight,
+      }));
+
+      rafId = null;
+    };
+
+    (async () => {
       const { default: Lenis } = await import('@studio-freight/lenis');
-
-      lenis = new Lenis({
-        duration: 1.15,
-        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      const lenis = new Lenis({
+        lerp: 0.05,      // <-- Slower smoother scroll
         smooth: true,
+        smoothWheel: true,
+        smoothTouch: true,
+        // easing: t => t, // linear option if you want
+      });
+
+      lenisRef.current = lenis;
+
+      lenis.on('scroll', ({ scroll }) => {
+        lastScrollYRef.current = scroll;
+        if (rafId === null) {
+          rafId = requestAnimationFrame(commitScrollState);
+        }
       });
 
       const raf = (time) => {
@@ -169,54 +241,14 @@ export default function Home() {
         requestAnimationFrame(raf);
       };
       requestAnimationFrame(raf);
-
-      const handle = () => {
-        const y = window.scrollY;
-        const vw = window.innerWidth;
-        const _vh = window.innerHeight;
-        setVh(_vh);
-
-        const maxScale = (vw / 4) / (vw - 24);
-        setScale(Math.max(1 - y / 800, maxScale));
-        setScrollY(y);
-
-        // 30vh on normal screens, 0 on tall ones
-        const isTallScreen = _vh > vw * 1.2;
-        setExtra(isTallScreen ? 0 : _vh * 0.3);
-
-        if (taglineRef.current) {
-          const h = taglineRef.current.offsetHeight;
-          setTaglineHeight(h);
-          setStickyTop(Math.max(0, _vh - h - 60));
-        }
-      };
-
-      handle();
-      window.addEventListener("scroll", handle);
-      window.addEventListener("resize", handle);
-
-      return () => {
-        window.removeEventListener("scroll", handle);
-        window.removeEventListener("resize", handle);
-      };
-    };
-
-    start();
+    })();
 
     return () => {
-      if (lenis) lenis.destroy?.();
+      lenisRef.current?.destroy?.();
+      lenisRef.current = null;
+      if (rafId) cancelAnimationFrame(rafId);
     };
-  }, []);
-
-  // Fade / height logic (same behaviour as before)
-  const FADE_START = 350;
-  const FADE_DISTANCE = 60;
-  const fadeEndScroll = FADE_START + FADE_DISTANCE + taglineText.length * 5;
-
-  const computedHeight =
-    scrollY >= fadeEndScroll
-      ? fadeEndScroll + extra + taglineHeight
-      : (vh ? vh * 2 : 2000);
+  }, [fadeEndScroll]);
 
   return (
     <main className="bg-white min-h-[300vh] relative">
@@ -226,23 +258,23 @@ export default function Home() {
       </div>
 
       {/* Hero Video & top tagline */}
-      <HeroVideo scale={scale} />
-      <Tagline scale={scale} />
+      <HeroVideo scale={ui.scale} />
+      <Tagline scale={ui.scale} />
 
       {/* Sarajevo tagline with dynamic sticky top, initial push by 50vh */}
       <div
         className="relative z-10 mt-[-110vh] sm:mt-[-125vh] md:mt-[-125vh] lg:mt-[-125vh] bg-white px-3"
         style={{
-          height: `${computedHeight}px`,
+          height: `${ui.computedHeight}px`,
           paddingRight: "calc(25vw + 0.75rem)",
           transition: 'height 0.1s ease',
           paddingTop: '50vh',
         }}
       >
-        <div className="sticky pb-[60px]" style={{ top: `${stickyTop}px` }}>
+        <div className="sticky pb-[60px]" style={{ top: `${ui.stickyTop}px` }}>
           <SarajevoTagline
             text={taglineText}
-            scrollY={scrollY}
+            scrollY={ui.scrollY}
             refObj={taglineRef}
           />
         </div>
