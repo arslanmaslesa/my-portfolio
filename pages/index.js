@@ -10,6 +10,53 @@ const poppins = Poppins({
   weight: ['400', '500', '600', '700'],
 });
 
+/* ------------------- Loader (circle fill, no %) ------------------- */
+const Loader = ({ progress, done }) => {
+  const radius = 12;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference * (1 - progress / 100);
+
+  return (
+    <div
+      className={`fixed inset-0 z-[10000] flex items-center justify-center bg-white transition-opacity duration-500 ${
+        done ? 'opacity-0 pointer-events-none' : 'opacity-100'
+      }`}
+    >
+      <svg
+        className="animate-spin"
+        style={{ animationDuration: '3s' }}
+        width="40"
+        height="40"
+        viewBox="0 0 40 40"
+        fill="none"
+      >
+        {/* Track */}
+        <circle
+          cx="20"
+          cy="20"
+          r={radius}
+          stroke="#ddd"
+          strokeWidth="4"
+          fill="none"
+        />
+        {/* Progress */}
+        <circle
+          cx="20"
+          cy="20"
+          r={radius}
+          stroke="blue"
+          strokeWidth="4"
+          fill="none"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+          strokeLinecap="round"
+          style={{ transition: 'stroke-dashoffset 0.3s ease' }}
+        />
+      </svg>
+    </div>
+  );
+};
+
 /* ------------------- Project Section ------------------- */
 const ProjectCard = ({ image, title }) => (
   <div className="relative w-full h-full rounded-[12px] overflow-hidden bg-neutral-100">
@@ -44,7 +91,7 @@ const ProjectSection = () => {
 };
 
 /* ------------------- Hero Video ------------------- */
-const HeroVideo = ({ scale }) => (
+const HeroVideo = ({ scale, onVideoReady }) => (
   <div className="h-[190vh] relative z-30 px-3 2xl:px-6">
     <div className="sticky top-3 2xl:top-6" style={{ willChange: 'transform' }}>
       <div
@@ -59,6 +106,11 @@ const HeroVideo = ({ scale }) => (
             loop
             playsInline
             className="w-full h-full object-cover block"
+            onCanPlayThrough={onVideoReady}
+            onLoadedData={(e) => {
+              // backup
+              onVideoReady?.();
+            }}
           />
         </div>
       </div>
@@ -152,6 +204,13 @@ export default function Home() {
   const extraRef = useRef(0);
   const lenisRef = useRef(null); // StrictMode guard
 
+  // Loader flags + progress (for the blue fill)
+  const [domReady, setDomReady] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  const totalSteps = 2; // DOM + video
+
   // React state
   const [ui, setUi] = useState({
     scale: 1,
@@ -163,6 +222,35 @@ export default function Home() {
   const FADE_START = 350;
   const FADE_DISTANCE = 60;
   const fadeEndScroll = FADE_START + FADE_DISTANCE + taglineText.length * 5;
+
+  // progress update
+  useEffect(() => {
+    let steps = 0;
+    if (domReady) steps += 1;
+    if (videoReady) steps += 1;
+    setProgress((steps / totalSteps) * 100);
+  }, [domReady, videoReady]);
+
+  const isLoaded = progress >= 100;
+
+  // Mark DOM loaded (all resources)
+  useEffect(() => {
+    const done = () => setDomReady(true);
+    if (document.readyState === 'complete') {
+      done();
+    } else {
+      window.addEventListener('load', done);
+      return () => window.removeEventListener('load', done);
+    }
+  }, []);
+
+  // Fallback for video
+  useEffect(() => {
+    if (domReady && !videoReady) {
+      const t = setTimeout(() => setVideoReady(true), 2500);
+      return () => clearTimeout(t);
+    }
+  }, [domReady, videoReady]);
 
   // Measure stuff
   useEffect(() => {
@@ -220,11 +308,10 @@ export default function Home() {
     (async () => {
       const { default: Lenis } = await import('@studio-freight/lenis');
       const lenis = new Lenis({
-        lerp: 0.05,      // <-- Slower smoother scroll
+        lerp: 0.6,
         smooth: true,
         smoothWheel: true,
         smoothTouch: true,
-        // easing: t => t, // linear option if you want
       });
 
       lenisRef.current = lenis;
@@ -252,13 +339,16 @@ export default function Home() {
 
   return (
     <main className="bg-white min-h-[300vh] relative">
+      {/* Loader Overlay */}
+      <Loader progress={progress} done={isLoaded} />
+
       {/* Navbar */}
       <div className="fixed top-0 left-0 w-full z-[9999]">
         <Navbar />
       </div>
 
       {/* Hero Video & top tagline */}
-      <HeroVideo scale={ui.scale} />
+      <HeroVideo scale={ui.scale} onVideoReady={() => setVideoReady(true)} />
       <Tagline scale={ui.scale} />
 
       {/* Sarajevo tagline with dynamic sticky top, initial push by 50vh */}
