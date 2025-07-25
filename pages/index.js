@@ -308,7 +308,7 @@ export default function Home() {
     (async () => {
       const { default: Lenis } = await import('@studio-freight/lenis');
       const lenis = new Lenis({
-        lerp: 0.6,
+        lerp: 0.1,
         smooth: true,
         smoothWheel: true,
         smoothTouch: true,
