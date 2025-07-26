@@ -75,8 +75,8 @@ const ProjectSection = () => {
   const itemHeight = "[height:calc(100vw-108px)] md:[height:calc((100vw-64px)/2-44px)]";
 
   return (
-    <section className="px-3 pb-12">
-      <div className="grid gap-3 grid-cols-1 md:grid-cols-2">
+    <section className="px-3 2xl:px-6 pb-12">
+      <div className="grid gap-3 2xl:gap-6 grid-cols-1 md:grid-cols-2">
         {[1, 2, 3, 4, 5].map(id => (
           <div
             key={id}
@@ -353,7 +353,7 @@ export default function Home() {
 
       {/* Sarajevo tagline with dynamic sticky top, initial push by 50vh */}
       <div
-        className="relative z-10 mt-[-110vh] sm:mt-[-125vh] md:mt-[-125vh] lg:mt-[-125vh] bg-white px-3"
+        className="relative z-10 mt-[-120vh] sm:mt-[-125vh] md:mt-[-125vh] 2xl:mt-[-135vh] bg-white px-3 2xl:px-6"
         style={{
           height: `${ui.computedHeight}px`,
           paddingRight: "calc(25vw + 0.75rem)",
