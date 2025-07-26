@@ -91,32 +91,55 @@ const ProjectSection = () => {
 };
 
 /* ------------------- Hero Video ------------------- */
-const HeroVideo = ({ scale, onVideoReady }) => (
-  <div className="h-[190vh] relative z-30 px-3 2xl:px-6">
-    <div className="sticky top-3 2xl:top-6" style={{ willChange: 'transform' }}>
-      <div
-        className="rounded-[12px] overflow-hidden"
-        style={{ transform: `scale(${scale})`, transformOrigin: "top right" }}
-      >
-        <div className="relative w-full h-[calc(100vh-24px)] 2xl:h-[calc(100vh-48px)] overflow-hidden rounded-[12px]">
-          <video
-            src="/hero1.mp4"
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="w-full h-full object-cover block"
-            onCanPlayThrough={onVideoReady}
-            onLoadedData={(e) => {
-              // backup
-              onVideoReady?.();
-            }}
-          />
+const INTRO_DURATION = 1200; // ms
+
+const HeroVideo = ({ scale, onVideoReady, introPlaying, introDone }) => {
+  const [introScale, setIntroScale] = useState(0);
+
+  useEffect(() => {
+    if (introPlaying) {
+      const id = requestAnimationFrame(() => setIntroScale(1));
+      return () => cancelAnimationFrame(id);
+    }
+  }, [introPlaying]);
+
+  const isIntro = !introDone;
+  const effectiveScale = isIntro ? introScale : scale;
+  const transition = isIntro
+    ? `transform ${INTRO_DURATION}ms cubic-bezier(0.215, 0.61, 0.355, 1)`
+    : 'none';
+  const origin = isIntro ? 'top left' : 'top right';
+
+  return (
+    <div className="h-[190vh] relative z-30 px-3 2xl:px-6">
+      <div className="sticky top-3 2xl:top-6" style={{ willChange: 'transform' }}>
+        <div
+          className="rounded-[12px] overflow-hidden"
+          style={{
+            transform: `scale(${effectiveScale})`,
+            transformOrigin: origin,
+            transition,
+          }}
+        >
+          <div className="relative w-full h-[calc(100vh-24px)] 2xl:h-[calc(100vh-48px)] overflow-hidden rounded-[12px]">
+            <video
+              src="/hero1.mp4"
+              autoPlay
+              muted
+              loop
+              playsInline
+              className="w-full h-full object-cover block"
+              onCanPlayThrough={onVideoReady}
+              onLoadedData={() => {
+                onVideoReady?.();
+              }}
+            />
+          </div>
         </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 /* ------------------- Top (ARSLAN MASLESA) Tagline ------------------- */
 const Tagline = ({ scale }) => {
@@ -208,8 +231,10 @@ export default function Home() {
   const [domReady, setDomReady] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
   const [progress, setProgress] = useState(0);
-
   const totalSteps = 2; // DOM + video
+
+  // Intro (post-loader) animation state
+  const [intro, setIntro] = useState({ playing: false, done: false });
 
   // React state
   const [ui, setUi] = useState({
@@ -244,6 +269,29 @@ export default function Home() {
     }
   }, []);
 
+  useEffect(() => {
+  if (!isLoaded) {
+    // Lock scroll: hide overflow on both html and body
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    // For mobile - prevent touch scroll
+    document.body.style.touchAction = 'none';
+  } else {
+    // Unlock scroll
+    document.body.style.overflow = '';
+    document.documentElement.style.overflow = '';
+    document.body.style.touchAction = '';
+  }
+
+  return () => {
+    // Clean up on unmount
+    document.body.style.overflow = '';
+    document.documentElement.style.overflow = '';
+    document.body.style.touchAction = '';
+  };
+}, [isLoaded]);
+
+
   // Fallback for video
   useEffect(() => {
     if (domReady && !videoReady) {
@@ -251,6 +299,44 @@ export default function Home() {
       return () => clearTimeout(t);
     }
   }, [domReady, videoReady]);
+
+  // Trigger intro AFTER loader completes (pause Lenis during it)
+  useEffect(() => {
+  if (!isLoaded || intro.done || intro.playing) return;
+
+  const startIntro = () => {
+    setIntro({ playing: true, done: false });
+
+    // Pause Lenis only if it's initialized
+    if (lenisRef.current) {
+      lenisRef.current.stop();
+    }
+
+    const t = setTimeout(() => {
+      setIntro({ playing: false, done: true });
+
+      // Restart Lenis if it's initialized
+      if (lenisRef.current) {
+        lenisRef.current.start();
+      }
+    }, INTRO_DURATION);
+
+    return () => clearTimeout(t);
+  };
+
+  // If Lenis isn't ready yet, delay intro slightly
+  if (lenisRef.current) startIntro();
+  else {
+    const id = setInterval(() => {
+      if (lenisRef.current) {
+        startIntro();
+        clearInterval(id);
+      }
+    }, 50);
+    return () => clearInterval(id);
+  }
+}, [isLoaded, intro.done, intro.playing]);
+
 
   // Measure stuff
   useEffect(() => {
@@ -348,7 +434,12 @@ export default function Home() {
       </div>
 
       {/* Hero Video & top tagline */}
-      <HeroVideo scale={ui.scale} onVideoReady={() => setVideoReady(true)} />
+      <HeroVideo
+        scale={ui.scale}
+        introPlaying={intro.playing}
+        introDone={intro.done}
+        onVideoReady={() => setVideoReady(true)}
+      />
       <Tagline scale={ui.scale} />
 
       {/* Sarajevo tagline with dynamic sticky top, initial push by 50vh */}
