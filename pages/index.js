@@ -132,17 +132,9 @@ export { ProjectSection };
 
 
 /* ------------------- Hero Video ------------------- */
-const INTRO_DURATION = 1200; // ms           // video expand duration
-const TAGLINE_TO_BLACK_DURATION = 1000;       // ms (text fade-to-black step)
+const INTRO_DURATION = 1200; // ms  - video expand duration
+const TAGLINE_TO_BLACK_DURATION = 1000; // ms - text fade-to-black step
 
-/**
- * The goal:
- * 1) After loader -> pause scrolling.
- * 2) Tagline runs first and "fades to black".
- * 3) Immediately after that, video expand animation plays (INTRO_DURATION).
- *    During this expand, tagline text turns white (to blend over video).
- * 4) When video expand ends, resume scrolling.
- */
 const HeroVideo = ({ scale, onVideoReady, introPlaying, introDone }) => {
   const [introScale, setIntroScale] = useState(0);
 
@@ -314,6 +306,8 @@ export default function Home() {
   const lenisRef = useRef(null); // StrictMode guard
   const sequenceStartedRef = useRef(false);
 
+  const needScrollResetRef = useRef(true); // we’ll reset to top after loader / when lenis boots
+
   // Loader flags + progress (for the blue fill)
   const [domReady, setDomReady] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
@@ -324,7 +318,6 @@ export default function Home() {
   const [intro, setIntro] = useState({ playing: false, done: false });
 
   // Intro phases for the tagline
-  // 'idle' -> (loader) ... then 'intro' (black) -> video expand kicks in and we switch to 'done' (white)
   const [taglinePhase, setTaglinePhase] = useState('idle'); // 'idle' | 'intro' | 'done'
 
   // React state
@@ -348,6 +341,92 @@ export default function Home() {
   }, [domReady, videoReady]);
 
   const isLoaded = progress >= 100;
+  const shouldLockScroll = !isLoaded || !intro.done; // <— single truth: lock until intro finishes
+
+  /* Never restore old scroll */
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'scrollRestoration' in history) {
+      history.scrollRestoration = 'manual';
+    }
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+  }, []);
+
+  /* Hard scroll lock/unlock tied to shouldLockScroll (no gaps) */
+  useEffect(() => {
+    const preventKeys = (e) => {
+      const keys = [32, 33, 34, 35, 36, 37, 38, 39, 40];
+      if (keys.includes(e.keyCode)) e.preventDefault();
+    };
+    const prevent = (e) => e.preventDefault();
+
+    const lock = () => {
+      const body = document.body;
+      const scrollY = window.scrollY;
+
+      body.style.position = 'fixed';
+      body.style.top = `-${scrollY}px`;
+      body.style.left = '0';
+      body.style.right = '0';
+      body.style.overflow = 'hidden';
+      body.style.width = '100%';
+
+      window.addEventListener('wheel', prevent, { passive: false });
+      window.addEventListener('touchmove', prevent, { passive: false });
+      window.addEventListener('keydown', preventKeys, { passive: false });
+    };
+
+    const unlock = () => {
+      const body = document.body;
+      body.style.position = '';
+      body.style.top = '';
+      body.style.left = '';
+      body.style.right = '';
+      body.style.overflow = '';
+      body.style.width = '';
+
+      window.removeEventListener('wheel', prevent);
+      window.removeEventListener('touchmove', prevent);
+      window.removeEventListener('keydown', preventKeys);
+    };
+
+    if (shouldLockScroll) {
+      lock();
+      if (lenisRef.current) lenisRef.current.stop();
+    } else {
+      unlock();
+      if (lenisRef.current) lenisRef.current.start();
+    }
+
+    return () => {
+      // Cleanup on unmount
+      unlock();
+    };
+  }, [shouldLockScroll]);
+
+  /* After loader -> force to top (window + Lenis) */
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const resetToTop = () => {
+      lastScrollYRef.current = 0;
+      if (lenisRef.current) {
+        lenisRef.current.scrollTo(0, { immediate: true });
+      } else {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      }
+      needScrollResetRef.current = false;
+    };
+
+    requestAnimationFrame(() => requestAnimationFrame(resetToTop));
+  }, [isLoaded]);
+
+  // If Lenis boots after loader finished, still reset top once
+  useEffect(() => {
+    if (!lenisRef.current || !isLoaded || !needScrollResetRef.current) return;
+    lenisRef.current.scrollTo(0, { immediate: true });
+    needScrollResetRef.current = false;
+  }, [isLoaded, lenisRef.current]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Mark DOM loaded (all resources)
   useEffect(() => {
@@ -369,34 +448,25 @@ export default function Home() {
   }, [domReady, videoReady]);
 
   /**
-   * NEW: Orchestrate the full "tagline -> video expand" sequence and keep scrolling paused
-   * for the entire duration.
+   * Orchestrate the "tagline -> video expand" sequence.
+   * We don't rely on scroll locking here anymore—it's globally controlled by shouldLockScroll.
    */
   useEffect(() => {
     if (!isLoaded || sequenceStartedRef.current) return;
 
     sequenceStartedRef.current = true;
 
-    const stopLenis = () => {
-      if (lenisRef.current) lenisRef.current.stop();
-    };
-    const startLenis = () => {
-      if (lenisRef.current) lenisRef.current.start();
-    };
-
-    // 1) Immediately pause scroll & start tagline fade-to-black phase
-    stopLenis();
+    // Start tagline intro immediately
     setTaglinePhase('intro');
 
     const t1 = setTimeout(() => {
-      // 2) When tagline fade-to-black is over, switch tagline to white and start video expand
+      // Switch tagline to white and start video expand
       setTaglinePhase('done');
       setIntro({ playing: true, done: false });
 
       const t2 = setTimeout(() => {
-        // 3) End sequence, resume scrolling
         setIntro({ playing: false, done: true });
-        startLenis();
+        // scroll starts automatically by shouldLockScroll watcher
       }, INTRO_DURATION);
 
       return () => clearTimeout(t2);
@@ -469,11 +539,15 @@ export default function Home() {
 
       lenisRef.current = lenis;
 
+      // Ensure we are at the very top if loader already finished
+      if (isLoaded && needScrollResetRef.current) {
+        lenis.scrollTo(0, { immediate: true });
+        needScrollResetRef.current = false;
+      }
+
       lenis.on('scroll', ({ scroll }) => {
         lastScrollYRef.current = scroll;
-        if (rafId === null) {
-          rafId = requestAnimationFrame(commitScrollState);
-        }
+        if (rafId === null) rafId = requestAnimationFrame(commitScrollState);
       });
 
       const raf = (time) => {
@@ -488,7 +562,7 @@ export default function Home() {
       lenisRef.current = null;
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [fadeEndScroll]);
+  }, [fadeEndScroll, isLoaded]);
 
   return (
     <main className="bg-white min-h-[300vh] relative">
