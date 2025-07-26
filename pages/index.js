@@ -36,7 +36,7 @@ const Loader = ({ progress, done }) => {
           cy="20"
           r={radius}
           stroke="#ddd"
-          strokeWidth="4"
+          strokeWidth="3"
           fill="none"
         />
         {/* Progress */}
@@ -44,8 +44,8 @@ const Loader = ({ progress, done }) => {
           cx="20"
           cy="20"
           r={radius}
-          stroke="blue"
-          strokeWidth="4"
+          stroke="black"
+          strokeWidth="3"
           fill="none"
           strokeDasharray={circumference}
           strokeDashoffset={dashOffset}
@@ -59,36 +59,77 @@ const Loader = ({ progress, done }) => {
 
 /* ------------------- Project Section ------------------- */
 const ProjectCard = ({ image, title }) => (
-  <div className="relative w-full h-full rounded-[12px] overflow-hidden bg-neutral-100">
+  <div className="relative w-full h-full rounded-[12px] overflow-hidden bg-neutral-100 group">
     <Image
       src={image}
       alt={title}
       fill
       sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-      className="object-cover"
+      className="object-cover transform transition-transform duration-500 ease-in-out group-hover:scale-105"
       priority={false}
     />
+
+    <div className={`absolute bottom-3 2xl:bottom-6 left-3 2xl:left-6 pl-6 2xl:pl-12 pr-2 2xl:pr-4 py-2 2xl:py-4 gap-3 2xl:gap-6 inline-flex items-center w-fit h-fit rounded-[8px] bg-white ${poppins.className}`}>
+      <p className="text-black text-[16px] 2xl:text-[24px] font-semibold leading-none whitespace-nowrap">
+        {title}
+      </p>
+
+      <div className="h-9 w-9 2xl:h-16 2xl:w-16 rounded-full bg-[#E6E6E6] flex items-center justify-center transition-colors duration-500 group-hover:bg-black">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth="3"
+          stroke="currentColor"
+          className="h-4 w-4 text-black transition-colors duration-300 group-hover:text-white"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </div>
+    </div>
   </div>
 );
 
-const ProjectSection = () => {
-  const itemHeight = "[height:calc(100vw-108px)] md:[height:calc((100vw-64px)/2-44px)]";
 
+// utils/cn (optional helper)
+const cn = (...classes) => classes.filter(Boolean).join(' ');
+
+// Data you can grow easily
+const PROJECTS = [
+  { id: 1, image: '/proj1.png', title: 'Appo Landing Page' },
+  { id: 2, image: '/proj2.png', title: 'Appo' },
+  { id: 3, image: '/proj3.png', title: 'Appo for Business', featured: true }, // spans 2 cols on md+
+  { id: 4, image: '/proj4.png', title: 'Book Covers' },
+  { id: 5, image: '/proj5.png', title: 'Kapetanovina Visit Card' },
+];
+
+// Keep your height logic in one place
+const itemHeight =
+  'h-[calc(100vw-108px)] md:h-[calc((100vw-64px)/2-44px)]';
+
+const ProjectSection = ({ projects = PROJECTS }) => {
   return (
     <section className="px-3 2xl:px-6 pb-12">
       <div className="grid gap-3 2xl:gap-6 grid-cols-1 md:grid-cols-2">
-        {[1, 2, 3, 4, 5].map(id => (
+        {projects.map((p) => (
           <div
-            key={id}
-            className={`w-full ${id === 3 ? 'col-span-1 md:col-span-2' : ''} ${itemHeight}`}
+            key={p.id}
+            className={cn(
+              'w-full',
+              itemHeight,
+              p.featured && 'md:col-span-2'
+            )}
           >
-            <ProjectCard image={`/proj${id}.png`} title={`Project ${id}`} />
+            <ProjectCard image={p.image} title={p.title} />
           </div>
         ))}
       </div>
     </section>
   );
 };
+
+export { ProjectSection };
+
 
 /* ------------------- Hero Video ------------------- */
 const INTRO_DURATION = 1200; // ms
@@ -268,29 +309,6 @@ export default function Home() {
       return () => window.removeEventListener('load', done);
     }
   }, []);
-
-  useEffect(() => {
-  if (!isLoaded) {
-    // Lock scroll: hide overflow on both html and body
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-    // For mobile - prevent touch scroll
-    document.body.style.touchAction = 'none';
-  } else {
-    // Unlock scroll
-    document.body.style.overflow = '';
-    document.documentElement.style.overflow = '';
-    document.body.style.touchAction = '';
-  }
-
-  return () => {
-    // Clean up on unmount
-    document.body.style.overflow = '';
-    document.documentElement.style.overflow = '';
-    document.body.style.touchAction = '';
-  };
-}, [isLoaded]);
-
 
   // Fallback for video
   useEffect(() => {
