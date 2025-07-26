@@ -109,7 +109,7 @@ const itemHeight =
 
 const ProjectSection = ({ projects = PROJECTS }) => {
   return (
-    <section className="px-3 2xl:px-6 pb-12">
+    <section className="px-3 2xl:px-6 pb-3 2xl:pb-6">
       <div className="grid gap-3 2xl:gap-6 grid-cols-1 md:grid-cols-2">
         {projects.map((p) => (
           <div
@@ -132,8 +132,17 @@ export { ProjectSection };
 
 
 /* ------------------- Hero Video ------------------- */
-const INTRO_DURATION = 1200; // ms
+const INTRO_DURATION = 1200; // ms           // video expand duration
+const TAGLINE_TO_BLACK_DURATION = 1000;       // ms (text fade-to-black step)
 
+/**
+ * The goal:
+ * 1) After loader -> pause scrolling.
+ * 2) Tagline runs first and "fades to black".
+ * 3) Immediately after that, video expand animation plays (INTRO_DURATION).
+ *    During this expand, tagline text turns white (to blend over video).
+ * 4) When video expand ends, resume scrolling.
+ */
 const HeroVideo = ({ scale, onVideoReady, introPlaying, introDone }) => {
   const [introScale, setIntroScale] = useState(0);
 
@@ -183,26 +192,62 @@ const HeroVideo = ({ scale, onVideoReady, introPlaying, introDone }) => {
 };
 
 /* ------------------- Top (ARSLAN MASLESA) Tagline ------------------- */
-const Tagline = ({ scale }) => {
-  const opacity = scale < 0.75 ? 0 : 1;
+const Tagline = ({ scale, phase }) => {
+  // phase: 'idle' | 'intro' (black) | 'done' (white)
+  const [showName, setShowName] = useState(false);
+  const [showRole, setShowRole] = useState(false);
+
+  useEffect(() => {
+    if (phase === 'intro') {
+      setShowName(true);
+      const t = setTimeout(() => setShowRole(true), 350);
+      return () => clearTimeout(t);
+    }
+    if (phase === 'done') {
+      setShowName(true);
+      setShowRole(true);
+    }
+  }, [phase]);
+
+  const wrapperOpacity = phase === 'intro' ? 1 : (scale < 0.75 ? 0 : 1);
+  const baseColor = phase === 'intro' ? 'text-black' : 'text-white';
 
   return (
     <div
       className={`fixed top-0 left-0 w-full h-full z-40 pointer-events-none px-6.5 2xl:px-13 ${poppins.className}`}
-      style={{ opacity, transition: "opacity 0.3s ease-out" }}
+      style={{ opacity: wrapperOpacity, transition: "opacity 0.3s ease-out" }}
     >
       <div className="flex flex-col md:flex-row h-full items-center justify-center md:justify-between">
-        <p className="text-white text-[18px] 2xl:text-[32px] font-medium tracking-[-0.01em] text-center md:text-left md:w-1/2">
+        {/* NAME */}
+        <p
+          className={`
+            ${baseColor}
+            text-[18px] 2xl:text-[32px] font-medium tracking-[-0.01em] text-center md:text-left md:w-1/2
+            transition-all duration-500
+            ${showName ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
+          `}
+        >
           ARSLAN MASLESA
         </p>
+
         <div className="h-30 md:hidden" />
-        <p className="text-white text-[18px] 2xl:text-[32px] font-medium tracking-[-0.01em] text-center md:text-left md:w-1/2">
+
+        {/* ROLE */}
+        <p
+          className={`
+            ${baseColor}
+            text-[18px] 2xl:text-[32px] font-medium tracking-[-0.01em] text-center md:text-left md:w-1/2
+            transition-all duration-500
+            ${showRole ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
+          `}
+        >
           PRODUCT DESIGNER
         </p>
       </div>
     </div>
   );
 };
+
 
 /* ------------------- Sarajevo Tagline ------------------- */
 const SarajevoTagline = ({ text, scrollY, refObj }) => {
@@ -267,6 +312,7 @@ export default function Home() {
   const taglineHeightRef = useRef(0);
   const extraRef = useRef(0);
   const lenisRef = useRef(null); // StrictMode guard
+  const sequenceStartedRef = useRef(false);
 
   // Loader flags + progress (for the blue fill)
   const [domReady, setDomReady] = useState(false);
@@ -274,8 +320,12 @@ export default function Home() {
   const [progress, setProgress] = useState(0);
   const totalSteps = 2; // DOM + video
 
-  // Intro (post-loader) animation state
+  // Intro (video expand) animation state
   const [intro, setIntro] = useState({ playing: false, done: false });
+
+  // Intro phases for the tagline
+  // 'idle' -> (loader) ... then 'intro' (black) -> video expand kicks in and we switch to 'done' (white)
+  const [taglinePhase, setTaglinePhase] = useState('idle'); // 'idle' | 'intro' | 'done'
 
   // React state
   const [ui, setUi] = useState({
@@ -318,43 +368,42 @@ export default function Home() {
     }
   }, [domReady, videoReady]);
 
-  // Trigger intro AFTER loader completes (pause Lenis during it)
+  /**
+   * NEW: Orchestrate the full "tagline -> video expand" sequence and keep scrolling paused
+   * for the entire duration.
+   */
   useEffect(() => {
-  if (!isLoaded || intro.done || intro.playing) return;
+    if (!isLoaded || sequenceStartedRef.current) return;
 
-  const startIntro = () => {
-    setIntro({ playing: true, done: false });
+    sequenceStartedRef.current = true;
 
-    // Pause Lenis only if it's initialized
-    if (lenisRef.current) {
-      lenisRef.current.stop();
-    }
+    const stopLenis = () => {
+      if (lenisRef.current) lenisRef.current.stop();
+    };
+    const startLenis = () => {
+      if (lenisRef.current) lenisRef.current.start();
+    };
 
-    const t = setTimeout(() => {
-      setIntro({ playing: false, done: true });
+    // 1) Immediately pause scroll & start tagline fade-to-black phase
+    stopLenis();
+    setTaglinePhase('intro');
 
-      // Restart Lenis if it's initialized
-      if (lenisRef.current) {
-        lenisRef.current.start();
-      }
-    }, INTRO_DURATION);
+    const t1 = setTimeout(() => {
+      // 2) When tagline fade-to-black is over, switch tagline to white and start video expand
+      setTaglinePhase('done');
+      setIntro({ playing: true, done: false });
 
-    return () => clearTimeout(t);
-  };
+      const t2 = setTimeout(() => {
+        // 3) End sequence, resume scrolling
+        setIntro({ playing: false, done: true });
+        startLenis();
+      }, INTRO_DURATION);
 
-  // If Lenis isn't ready yet, delay intro slightly
-  if (lenisRef.current) startIntro();
-  else {
-    const id = setInterval(() => {
-      if (lenisRef.current) {
-        startIntro();
-        clearInterval(id);
-      }
-    }, 50);
-    return () => clearInterval(id);
-  }
-}, [isLoaded, intro.done, intro.playing]);
+      return () => clearTimeout(t2);
+    }, TAGLINE_TO_BLACK_DURATION);
 
+    return () => clearTimeout(t1);
+  }, [isLoaded]);
 
   // Measure stuff
   useEffect(() => {
@@ -458,7 +507,7 @@ export default function Home() {
         introDone={intro.done}
         onVideoReady={() => setVideoReady(true)}
       />
-      <Tagline scale={ui.scale} />
+      <Tagline scale={ui.scale} phase={taglinePhase} />
 
       {/* Sarajevo tagline with dynamic sticky top, initial push by 50vh */}
       <div
