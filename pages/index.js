@@ -192,7 +192,7 @@ const Tagline = ({ scale, phase }) => {
   useEffect(() => {
     if (phase === 'intro') {
       setShowName(true);
-      const t = setTimeout(() => setShowRole(true), 350);
+      const t = setTimeout(() => setShowRole(true), 400);
       return () => clearTimeout(t);
     }
     if (phase === 'done') {
