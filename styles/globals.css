@@ -36,4 +36,16 @@ html {
 
 
 
+/* Target video subtitles */
+video::cue {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 200; /* semibold */
+  font-size: 18px; /* text-[20px] */
+  color: white; /* text-white */
+  background-color: rgba(0, 0, 0, 0.4); /* semi-transparent black bg */
+  padding: 0px; /* px-2 py-1 */
+  border-radius: 0px; /* rounded-md */
+  text-align: center;
+  text-shadow: 0px 0px 0px rgba(0,0,0,0.0);
+}
 
