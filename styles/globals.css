@@ -42,7 +42,7 @@ video::cue {
   font-weight: 200; /* semibold */
   font-size: 18px; /* text-[20px] */
   color: white; /* text-white */
-  background-color: rgba(0, 0, 0, 0.4); /* semi-transparent black bg */
+  background-color: rgba(0, 0, 0, 0); /* semi-transparent black bg */
   padding: 0px; /* px-2 py-1 */
   border-radius: 0px; /* rounded-md */
   text-align: center;
