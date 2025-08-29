@@ -85,7 +85,6 @@ const ProjectCard = ({ image, title, video, subtitles }) => {
                 kind="subtitles"
                 srcLang="en"
                 label="English"
-                default
               />
             )}
           </video>
