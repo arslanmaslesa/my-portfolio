@@ -36,15 +36,23 @@ html {
 
 
 
-/* Target video subtitles */
 video::cue {
   font-family: 'Poppins', sans-serif;
-  font-weight: 200; /* semibold */
-  font-size: 18px; /* text-[20px] */
-  color: rgb(255, 255, 255); /* text-white */
-  padding: 0px; /* px-2 py-1 */
-  border-radius: 0px; /* rounded-md */
-  text-align: center;
-  text-shadow: 0px 0px 0px rgba(0,0,0,0.0);
-}
+  font-weight: 400;
+  font-size: 18px;
+  color: #ffffff;
 
+  background: rgba(0,0,0,0.4);
+  padding: 4px 12px;
+  border-radius: 8px;
+
+  text-align: center;
+  line-height: 1.4;
+
+  display: inline;
+  white-space: pre-line;
+
+  /* Move the cue upward */
+  position: relative;
+  top: -12px;
+}
