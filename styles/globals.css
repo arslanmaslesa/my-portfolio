@@ -37,22 +37,19 @@ html {
 
 
 video::cue {
+  all: unset;
   font-family: 'Poppins', sans-serif;
   font-weight: 400;
   font-size: 18px;
-  color: #ffffff;
-
+  color: #fff;
   background: rgba(0,0,0,0.4);
   padding: 4px 12px;
   border-radius: 8px;
-
+  display: inline-block;
+  white-space: pre-line;
   text-align: center;
   line-height: 1.4;
-
-  display: inline;
-  white-space: pre-line;
-
-  /* Move the cue upward */
   position: relative;
-  top: -12px;
+  bottom: 3px; /* pushes the whole block up */
 }
+
