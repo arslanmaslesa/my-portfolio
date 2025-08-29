@@ -37,12 +37,11 @@ html {
 
 
 video::cue {
-  all: unset;
+
   font-family: 'Poppins', sans-serif;
   font-weight: 400;
   font-size: 18px;
   color: #fff;
-  background: rgba(0,0,0,0.4);
   padding: 4px 12px;
   border-radius: 8px;
   display: inline-block;
