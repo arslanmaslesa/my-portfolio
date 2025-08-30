@@ -8,14 +8,13 @@ const poppins = Poppins({
   weight: ['400', '500', '600', '700'],
 });
 
-const ProjectCard = ({ image, title, video, subtitles, showSoundButton = true }) => {
+const ProjectCard = ({ image, title, video, subtitles, showSoundButton = true, skills = [] }) => {
   const [hovered, setHovered] = useState(false);
   const [muted, setMuted] = useState(true);
   const [captionsOn, setCaptionsOn] = useState(false);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
   const videoRef = useRef(null);
 
-  // Detect if device is touch-enabled
   useEffect(() => {
     setIsTouchDevice(
       typeof window !== "undefined" &&
@@ -23,26 +22,16 @@ const ProjectCard = ({ image, title, video, subtitles, showSoundButton = true })
     );
   }, []);
 
-  // Play / pause on hover (disabled for touch devices)
   useEffect(() => {
     if (!videoRef.current || isTouchDevice) return;
-
-    if (hovered) {
-      videoRef.current.play().catch(() => {});
-    } else {
-      videoRef.current.pause();
-      // rewind if desired: videoRef.current.currentTime = 0;
-    }
+    if (hovered) videoRef.current.play().catch(() => {});
+    else videoRef.current.pause();
   }, [hovered, isTouchDevice]);
 
-  // Sync muted state with video element
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.muted = muted;
-    }
+    if (videoRef.current) videoRef.current.muted = muted;
   }, [muted]);
 
-  // Sync captions state with video track
   useEffect(() => {
     if (videoRef.current && videoRef.current.textTracks.length > 0) {
       const track = videoRef.current.textTracks[0];
@@ -56,10 +45,7 @@ const ProjectCard = ({ image, title, video, subtitles, showSoundButton = true })
       onMouseEnter={() => !isTouchDevice && setHovered(true)}
       onMouseLeave={() => !isTouchDevice && setHovered(false)}
     >
-      {/* Thumbnail Image:
-          - Always zooms on hover (group-hover:scale-105)
-          - Only fades out (group-hover:opacity-0) when there is a video (and not touch device)
-      */}
+      {/* Image */}
       <Image
         src={image}
         alt={title}
@@ -90,27 +76,17 @@ const ProjectCard = ({ image, title, video, subtitles, showSoundButton = true })
             className="w-full h-full object-cover"
           >
             {subtitles && (
-              <track
-                src={subtitles}
-                kind="subtitles"
-                srcLang="en"
-                label="English"
-              />
+              <track src={subtitles} kind="subtitles" srcLang="en" label="English" />
             )}
           </video>
 
-          {/* Inner shadow overlay */}
           <div
             className="absolute inset-0 pointer-events-none"
-            style={{
-              boxShadow: "inset 0 0 200px rgba(0,0,0,0.1)",
-              borderRadius: "12px",
-            }}
+            style={{ boxShadow: "inset 0 0 200px rgba(0,0,0,0.1)", borderRadius: "12px" }}
           />
 
           {/* Controls */}
-          <div className="absolute top-3 right-3 z-10 flex flex-col gap-3">
-            {/* Sound button only if showSoundButton=true */}
+          <div className="absolute top-3 right-3 z-30 flex flex-col gap-3">
             {showSoundButton && (
               <button
                 onClick={() => setMuted(!muted)}
@@ -129,11 +105,10 @@ const ProjectCard = ({ image, title, video, subtitles, showSoundButton = true })
               </button>
             )}
 
-            {/* Captions button only if subtitles exist */}
             {subtitles && (
               <button
                 onClick={() => setCaptionsOn(!captionsOn)}
-                className="h-12 w-12 rounded-full bg-black/40 flex items-center justify-center hover:bg-black/60 transition-colors duration-300"
+                className="h-12 w-12 rounded-full bg-black/40 flex items-center justify-center hover:bg-black/80 transition-colors duration-300"
                 aria-pressed={captionsOn}
                 aria-label={captionsOn ? "Hide captions" : "Show captions"}
               >
@@ -154,17 +129,47 @@ const ProjectCard = ({ image, title, video, subtitles, showSoundButton = true })
         </div>
       )}
 
-      {/* Overlay info */}
-      <div
-        className={`absolute bottom-3 2xl:bottom-6 left-3 2xl:left-6 pl-6 2xl:pl-12 pr-2 2xl:pr-4 py-2 2xl:py-4 gap-3 2xl:gap-6 inline-flex items-center w-fit h-fit rounded-[8px] bg-white ${poppins.className}`}
-      >
-        <p className="text-black text-[16px] 2xl:text-[24px] font-semibold leading-none whitespace-nowrap">
-          {title}
-        </p>
-        <div className="h-9 w-9 2xl:h-16 2xl:w-16 rounded-full bg-[#E6E6E6] flex items-center justify-center transition-colors duration-500 group-hover:bg-black">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="3" stroke="currentColor" className="h-4 w-4 text-black transition-colors duration-300 group-hover:text-white">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
+      {/* Title + skills wrapper located at the same anchor so we can position skills exactly relative to title */}
+      <div className="absolute left-3 2xl:left-6 bottom-3 2xl:bottom-6 z-20">
+        <div className="relative">
+          {/* Skills — positioned relative to this wrapper so we can place them exactly 3 units above title.
+              bottom: calc(100% + 0.75rem) => 3 * 0.25rem = 0.75rem (exactly 3 Tailwind units above the title)
+              They sit underneath the title overlay via z-index.
+          */}
+          {skills && skills.length > 0 && (
+            <div
+              className="relative left-0 z-0 pointer-events-none bottom-2"
+              aria-hidden={!hovered}
+            >
+              <div className="flex flex-col items-start">
+                {skills.map((s, i) => {
+                  // lower pills animate first for bottom->top feel
+                  const delay = (skills.length - 1 - i) * 60;
+                  return (
+                    <span
+  key={i}
+  className={`mt-2 inline-block bg-black text-white text-[12px] font-medium px-6 py-3 rounded-[8px] transform opacity-0 translate-y-2 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 ${poppins.className}`}
+  style={{ transitionDelay: `${delay}ms`, willChange: 'transform, opacity' }}
+>
+  {s}
+</span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Title overlay (keeps higher z-index within the wrapper) */}
+          <div className={`pl-6 2xl:pl-12 pr-2 2xl:pr-4 py-2 2xl:py-4 gap-3 inline-flex items-center w-fit h-fit rounded-[8px] bg-white z-10 ${poppins.className}`}>
+            <p className="text-black text-[16px] 2xl:text-[24px] font-semibold leading-none whitespace-nowrap">
+              {title}
+            </p>
+            <div className="h-9 w-9 2xl:h-16 2xl:w-16 rounded-full bg-[#E6E6E6] flex items-center justify-center transition-colors duration-500 group-hover:bg-black">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="3" stroke="currentColor" className="h-4 w-4 text-black transition-colors duration-300 group-hover:text-white">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </div>
         </div>
       </div>
     </div>
