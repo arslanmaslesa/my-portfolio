@@ -30,7 +30,7 @@ const SarajevoTagline = ({ text, scrollY = 0, videoHeight = 0, refObj = null }) 
   progress = Math.min(1, Math.max(0, progress));
 
   const lerpGrayToBlack = (t) => {
-    const start = 200;
+    const start = 210;
     const val = Math.round(start * (1 - t));
     return `rgb(${val}, ${val}, ${val})`;
   };
@@ -42,11 +42,11 @@ const SarajevoTagline = ({ text, scrollY = 0, videoHeight = 0, refObj = null }) 
   return (
     <div
       ref={containerRef}
-      className={`${poppins.className} max-w-[90vw] sm:max-w-[75vw] md:max-w-[60vw] lg:max-w-[50vw] text-center`}
+      className={`${poppins.className} max-w-[90vw] sm:max-w-[75vw] md:max-w-[60vw] lg:max-w-[80vw] text-center`}
       style={{ lineHeight: 1.05, pointerEvents: 'none' }}
     >
       <p
-        className="text-[32px] xl:text-[36px] 2xl:text-[64px] font-medium tracking-[-0.01em] leading-tight"
+        className="text-[36px] xl:text-[56px] 2xl:text-[100px] font-medium tracking-[-0.01em] leading-tight"
         style={{ margin: 0 }}
       >
         {words.map((w, i) => {

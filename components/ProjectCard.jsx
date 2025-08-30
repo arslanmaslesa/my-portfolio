@@ -8,7 +8,7 @@ const poppins = Poppins({
   weight: ['400', '500', '600', '700'],
 });
 
-const ProjectCard = ({ image, title, video, subtitles }) => {
+const ProjectCard = ({ image, title, video, subtitles, showSoundButton = true }) => {
   const [hovered, setHovered] = useState(false);
   const [muted, setMuted] = useState(true);
   const [captionsOn, setCaptionsOn] = useState(false);
@@ -31,10 +31,11 @@ const ProjectCard = ({ image, title, video, subtitles }) => {
       videoRef.current.play().catch(() => {});
     } else {
       videoRef.current.pause();
+      // rewind if desired: videoRef.current.currentTime = 0;
     }
   }, [hovered, isTouchDevice]);
 
-  // Sync muted state with video
+  // Sync muted state with video element
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.muted = muted;
@@ -55,28 +56,37 @@ const ProjectCard = ({ image, title, video, subtitles }) => {
       onMouseEnter={() => !isTouchDevice && setHovered(true)}
       onMouseLeave={() => !isTouchDevice && setHovered(false)}
     >
-      {/* Thumbnail Image */}
+      {/* Thumbnail Image:
+          - Always zooms on hover (group-hover:scale-105)
+          - Only fades out (group-hover:opacity-0) when there is a video (and not touch device)
+      */}
       <Image
         src={image}
         alt={title}
         fill
         sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-        className={`object-cover transform transition-transform duration-500 ease-in-out group-hover:scale-105
-          absolute inset-0 transition-opacity duration-700 ${hovered && video && !isTouchDevice ? 'opacity-0' : 'opacity-100'}`}
+        className={`absolute inset-0 object-cover transform transition-all duration-700 ease-in-out opacity-100 group-hover:scale-105 ${
+          video && !isTouchDevice ? 'group-hover:opacity-0' : ''
+        }`}
+        style={{ willChange: 'transform, opacity' }}
       />
 
       {/* Video (disabled on touch devices) */}
       {video && !isTouchDevice && (
         <div
-          className={`absolute inset-0 w-full h-full transition-opacity duration-700 ${
+          className={`absolute inset-0 w-full h-full transition-opacity duration-700 ease-in-out ${
             hovered ? 'opacity-100' : 'opacity-0'
           }`}
+          style={{ willChange: 'opacity' }}
+          aria-hidden={!hovered}
         >
           <video
             ref={videoRef}
             src={video}
             loop
             playsInline
+            muted={muted}
+            preload="metadata"
             className="w-full h-full object-cover"
           >
             {subtitles && (
@@ -100,39 +110,46 @@ const ProjectCard = ({ image, title, video, subtitles }) => {
 
           {/* Controls */}
           <div className="absolute top-3 right-3 z-10 flex flex-col gap-3">
-            {/* Mute / Unmute */}
-            <button
-              onClick={() => setMuted(!muted)}
-              className="h-12 w-12 rounded-full bg-black/40 flex items-center justify-center hover:bg-black/60 transition-colors duration-300"
-            >
-              {muted ? (
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 16 16" className="text-white">
-                  <path fill="currentColor" fillRule="evenodd" d="M8 2.81v10.38c0 .67-.81 1-1.28.53L3 10H1c-.55 0-1-.45-1-1V7c0-.55.45-1 1-1h2l3.72-3.72C7.19 1.81 8 2.14 8 2.81zm7.53 3.22l-1.06-1.06-1.97 1.97-1.97-1.97-1.06 1.06L11.44 8 9.47 9.97l1.06 1.06 1.97-1.97 1.97 1.97 1.06-1.06L13.56 8l1.97-1.97z"/>
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 16 16" className="text-white">
-                  <path fill="currentColor" fillRule="evenodd" d="M12 8.02c0 1.09-.45 2.09-1.17 2.83l-.67-.67c.55-.56.89-1.31.89-2.16 0-.85-.34-1.61-.89-2.16l.67-.67A3.99 3.99 0 0 1 12 8.02zM7.72 2.28L4 6H2c-.55 0-1 .45-1 1v2c0 .55.45 1 1 1h2l3.72 3.72c.47.47 1.28.14 1.28-.53V2.81c0-.67-.81-1-1.28-.53zm5.94.08l-.67.67a6.996 6.996 0 0 1 2.06 4.98c0 1.94-.78 3.7-2.06 4.98l.67.67A7.973 7.973 0 0 0 16 8c0-2.22-.89-4.22-2.34-5.66v.02zm-1.41 1.41l-.69.67a5.05 5.05 0 0 1 1.48 3.58c0 1.39-.56 2.66-1.48 3.56l.69.67A5.97 5.97 0 0 0 14 8.02c0-1.65-.67-3.16-1.75-4.25z"/>
-                </svg>
-              )}
-            </button>
+            {/* Sound button only if showSoundButton=true */}
+            {showSoundButton && (
+              <button
+                onClick={() => setMuted(!muted)}
+                className="h-12 w-12 rounded-full bg-black/40 flex items-center justify-center hover:bg-black/60 transition-colors duration-300"
+                aria-label={muted ? "Unmute video" : "Mute video"}
+              >
+                {muted ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 16 16" className="text-white">
+                    <path fill="currentColor" fillRule="evenodd" d="M8 2.81v10.38c0 .67-.81 1-1.28.53L3 10H1c-.55 0-1-.45-1-1V7c0-.55.45-1 1-1h2l3.72-3.72C7.19 1.81 8 2.14 8 2.81zm7.53 3.22l-1.06-1.06-1.97 1.97-1.97-1.97-1.06 1.06L11.44 8 9.47 9.97l1.06 1.06 1.97-1.97 1.97 1.97 1.06-1.06L13.56 8l1.97-1.97z"/>
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 16 16" className="text-white">
+                    <path fill="currentColor" fillRule="evenodd" d="M12 8.02c0 1.09-.45 2.09-1.17 2.83l-.67-.67c.55-.56.89-1.31.89-2.16 0-.85-.34-1.61-.89-2.16l.67-.67A3.99 3.99 0 0 1 12 8.02zM7.72 2.28L4 6H2c-.55 0-1 .45-1 1v2c0 .55.45 1 1 1h2l3.72 3.72c.47.47 1.28.14 1.28-.53V2.81c0-.67-.81-1-1.28-.53zm5.94.08l-.67.67a6.996 6.996 0 0 1 2.06 4.98c0 1.94-.78 3.7-2.06 4.98l.67.67A7.973 7.973 0 0 0 16 8c0-2.22-.89-4.22-2.34-5.66v.02zm-1.41 1.41l-.69.67a5.05 5.05 0 0 1 1.48 3.58c0 1.39-.56 2.66-1.48 3.56l.69.67A5.97 5.97 0 0 0 14 8.02c0-1.65-.67-3.16-1.75-4.25z"/>
+                  </svg>
+                )}
+              </button>
+            )}
 
-            {/* Captions */}
-            <button
-              onClick={() => setCaptionsOn(!captionsOn)}
-              className="h-12 w-12 rounded-full bg-black/40 flex items-center justify-center hover:bg-black/60 transition-colors duration-300"
-            >
-              {captionsOn ? (
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" className="h-6 w-6 text-white" fill="currentColor">
-                  <rect width="256" height="256" fill="none"></rect>
-                  <path d="M216,40H40A16.01833,16.01833,0,0,0,24,56V200a16.01833,16.01833,0,0,0,16,16H216a16.01833,16.01833,0,0,0,16-16V56A16.01833,16.01833,0,0,0,216,40ZM96,148a19.85259,19.85259,0,0,0,14.28613-6.00293,7.99956,7.99956,0,0,1,11.42774,11.19727,36,36,0,1,1,0-50.38868,7.99956,7.99956,0,0,1-11.42774,11.19727A20.00012,20.00012,0,1,0,96,148Zm72,0a19.85259,19.85259,0,0,0,14.28613-6.00293,7.99956,7.99956,0,0,1,11.42774,11.19727,36,36,0,1,1,0-50.38868,7.99956,7.99956,0,0,1-11.42774,11.19727A20.00012,20.00012,0,1,0,168,148Z"></path>
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" className="h-6 w-6 text-white" fill="none" stroke="currentColor" strokeWidth="16">
-                  <rect width="192" height="160" x="32" y="48" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16" rx="8"></rect>
-                  <path fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16" d="M116 147.59582a28 28 0 1 1 .00011-39.19153M188 147.59582a28 28 0 1 1 .00011-39.19153"></path>
-                </svg>
-              )}
-            </button>
+            {/* Captions button only if subtitles exist */}
+            {subtitles && (
+              <button
+                onClick={() => setCaptionsOn(!captionsOn)}
+                className="h-12 w-12 rounded-full bg-black/40 flex items-center justify-center hover:bg-black/60 transition-colors duration-300"
+                aria-pressed={captionsOn}
+                aria-label={captionsOn ? "Hide captions" : "Show captions"}
+              >
+                {captionsOn ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" className="h-6 w-6 text-white" fill="currentColor">
+                    <rect width="256" height="256" fill="none"></rect>
+                    <path d="M216,40H40A16.01833,16.01833,0,0,0,24,56V200a16.01833,16.01833,0,0,0,16,16H216a16.01833,16.01833,0,0,0,16-16V56A16.01833,16.01833,0,0,0,216,40ZM96,148a19.85259,19.85259,0,0,0,14.28613-6.00293,7.99956,7.99956,0,0,1,11.42774,11.19727,36,36,0,1,1,0-50.38868,7.99956,7.99956,0,0,1-11.42774,11.19727A20.00012,20.00012,0,1,0,96,148Zm72,0a19.85259,19.85259,0,0,0,14.28613-6.00293,7.99956,7.99956,0,0,1,11.42774,11.19727,36,36,0,1,1,0-50.38868,7.99956,7.99956,0,0,1-11.42774,11.19727A20.00012,20.00012,0,1,0,168,148Z"></path>
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" className="h-6 w-6 text-white" fill="none" stroke="currentColor" strokeWidth="16">
+                    <rect width="192" height="160" x="32" y="48" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16" rx="8"></rect>
+                    <path fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16" d="M116 147.59582a28 28 0 1 1 .00011-39.19153M188 147.59582a28 28 0 1 1 .00011-39.19153"></path>
+                  </svg>
+                )}
+              </button>
+            )}
           </div>
         </div>
       )}

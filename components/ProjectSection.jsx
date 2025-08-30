@@ -5,14 +5,22 @@ import cn from "../utils/cn";
 const PROJECTS = [
   { id: 1, image: '/proj1.png', title: 'Appo Landing Page' },
   { id: 2, image: '/proj2.png', title: 'Appo' },
-  { id: 3, 
+  { 
+    id: 3, 
     image: '/proj3.png', 
     title: 'Appo for Business', 
     featured: true,
     video: '/appoproductdemo.mp4',
-    subtitles: '/appoproductdemo.vtt', // <-- optional subtitles
+    subtitles: '/appoproductdemo.vtt',
+    showSoundButton: true
   },
-  { id: 4, image: '/proj4.png', title: 'Book Covers' },
+  { 
+    id: 4, 
+    image: '/proj4.png', 
+    title: 'Book Covers', 
+    video: '/books.mp4',
+    showSoundButton: false
+  },
   { id: 5, image: '/proj5.png', title: 'Kapetanovina Visit Card' },
 ];
 
@@ -28,6 +36,7 @@ const ProjectSection = ({ projects = PROJECTS }) => (
             title={p.title} 
             video={p.video} 
             subtitles={p.subtitles} 
+            showSoundButton={p.showSoundButton}  // ✅ pass it
           />
         </div>
       ))}
