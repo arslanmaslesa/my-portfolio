@@ -1,31 +1,21 @@
 'use client';
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 
-const INTRO_DURATION = 1200;
+const INTRO_DURATION = 1100; // slightly longer for more cinematic feel
 
-const HeroVideo = ({ onVideoReady, introPlaying, introDone }) => {
-  const [introScale, setIntroScale] = useState(0);
-
-  useEffect(() => {
-    if (introPlaying) {
-      const id = requestAnimationFrame(() => setIntroScale(1));
-      return () => cancelAnimationFrame(id);
-    }
-  }, [introPlaying]);
-
+const HeroVideo = ({ onVideoReady, introPlaying, introDone, clipScale }) => {
   const isIntro = !introDone;
-  const effectiveScale = isIntro ? introScale : 1;
+  const effectiveScale = isIntro ? clipScale : 1;
   const transition = isIntro
-    ? `transform ${INTRO_DURATION}ms cubic-bezier(0.215, 0.61, 0.355, 1)`
+    ? `clip-path ${INTRO_DURATION}ms cubic-bezier(0.22, 1, 0.36, 1)`
     : "none";
 
   return (
     <section className="absolute w-full h-screen px-3 py-3 2xl:px-6 2xl:py-6 z-30">
       <div
-        className="w-full h-full rounded-[12px] overflow-hidden"
+        className="w-full h-full rounded-[12px] overflow-hidden will-change-[clip-path]"
         style={{
-          transform: `scale(${effectiveScale})`,
-          transformOrigin: "top left",
+          clipPath: `inset(0 ${(1 - effectiveScale) * 100}% ${(1 - effectiveScale) * 100}% 0 round 12px)`,
           transition,
         }}
       >

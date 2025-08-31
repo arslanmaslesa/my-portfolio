@@ -31,6 +31,7 @@ export default function Home() {
 
   // Intro (video expand) animation
   const [intro, setIntro] = useState({ playing: false, done: false });
+  const [clipScale, setClipScale] = useState(0); // Lifted state for clipScale
 
   // Tagline phases
   const [taglinePhase, setTaglinePhase] = useState('idle'); // 'idle' | 'intro' | 'done'
@@ -134,7 +135,7 @@ export default function Home() {
     if (!lenisRef.current || !isLoaded || !needScrollResetRef.current) return;
     lenisRef.current.scrollTo(0, { immediate: true });
     needScrollResetRef.current = false;
-  }, [isLoaded, lenisRef.current]); // eslint-disable-line
+  }, [isLoaded, lenisRef.current]);
 
   /* ---------------- DOM Ready ---------------- */
   useEffect(() => {
@@ -165,12 +166,14 @@ export default function Home() {
 
     const t1 = setTimeout(() => {
       setTaglinePhase("done");
-      setIntro({ playing: true, done: false });
-
       const t2 = setTimeout(() => {
-        setIntro({ playing: false, done: true });
-      }, 1200); // INTRO_DURATION
-
+        setIntro({ playing: true, done: false });
+        setClipScale(1); // Start video animation
+        const t3 = setTimeout(() => {
+          setIntro({ playing: false, done: true });
+        }, 900); // INTRO_DURATION
+        return () => clearTimeout(t3);
+      }, 300); // 300ms pause before video animation
       return () => clearTimeout(t2);
     }, 1000); // TAGLINE_TO_BLACK_DURATION
 
@@ -189,7 +192,6 @@ export default function Home() {
       const isTallScreen = vh > vw * 1.2;
       extraRef.current = isTallScreen ? 0 : vh * 0.3;
 
-      // expose vh to SarajevoTagline via vhRef
       setUi((prev) => ({ ...prev, stickyTop: Math.max(0, vh - 120) }));
     };
 
@@ -209,7 +211,6 @@ export default function Home() {
       const vw = vwRef.current;
       const vh = vhRef.current;
 
-      // Keep scale fixed (only intro animates it)
       const scale = 1;
 
       setUi((prev) => ({ ...prev, scale, scrollY: y }));
@@ -253,39 +254,33 @@ export default function Home() {
 
   return (
     <main className="bg-white min-h-[300vh] relative">
-      {/* Loader */}
       <Loader progress={progress} done={isLoaded} />
-
-      {/* Navbar */}
       <div className="fixed top-0 left-0 w-full z-[9999]">
         <Navbar />
       </div>
-
-      {/* Hero Video + Tagline */}
       <HeroVideo
         scale={ui.scale}
         introPlaying={intro.playing}
         introDone={intro.done}
+        clipScale={clipScale}
+        setClipScale={setClipScale}
         onVideoReady={() => setVideoReady(true)}
       />
       <Tagline
         phase={taglinePhase}
         scrollY={ui.scrollY}
-        videoHeight={vhRef.current} // safe, SSR-friendly
+        videoHeight={vhRef.current}
+        clipScale={clipScale}
       />
-
-      {/* Sarajevo tagline - simplified and fullscreen sticky behind the video */}
       <div
         className="relative z-0 bg-white"
         style={{
-          // 200vh gives us 1 full-screen sticky area and 1 screen to scroll past
           height: "300vh",
         }}
       >
         <div
           className="sticky top-0 w-screen h-screen flex items-center justify-center"
           style={{
-            // only show after intro is done
             opacity: intro.done ? 1 : 0,
             transition: "opacity 0.45s ease",
             zIndex: 5,
@@ -299,8 +294,6 @@ export default function Home() {
           />
         </div>
       </div>
-
-      {/* Projects */}
       <ProjectSection />
     </main>
   );

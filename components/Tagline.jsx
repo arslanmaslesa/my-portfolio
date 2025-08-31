@@ -8,7 +8,7 @@ const poppins = Poppins({
 });
 
 /**
- * Tagline overlay (ARSLAN MASLESA / PRODUCT DESIGNER)
+ * Tagline overlay (ARSLAN MASLESA / PRODUCT DESIGNER / Rotating Words)
  * @param {string} phase - 'idle' | 'intro' | 'done'
  * @param {number} scrollY - current scroll from Lenis
  * @param {number} videoHeight - height of the hero video
@@ -16,16 +16,36 @@ const poppins = Poppins({
 const Tagline = ({ phase, scrollY, videoHeight }) => {
   const [showName, setShowName] = useState(false);
   const [showRole, setShowRole] = useState(false);
+  const [showTag, setShowTag] = useState(false);
+  const [currentWordIndex, setCurrentWordIndex] = useState(0);
 
+  const words = ['USER-FOCUSED', 'CREATIVE', 'FUNCTIONAL', 'ELEGANT', 'IMPACTFUL'];
+
+  // Handle word rotation every 2 seconds
+  useEffect(() => {
+    if (phase === 'intro' || phase === 'done') {
+      const interval = setInterval(() => {
+        setCurrentWordIndex((prevIndex) => (prevIndex + 1) % words.length);
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [phase]);
+
+  // Handle animation timing for each segment
   useEffect(() => {
     if (phase === 'intro') {
       setShowName(true);
-      const t = setTimeout(() => setShowRole(true), 400);
-      return () => clearTimeout(t);
+      const roleTimer = setTimeout(() => setShowRole(true), 400);
+      const tagTimer = setTimeout(() => setShowTag(true), 800);
+      return () => {
+        clearTimeout(roleTimer);
+        clearTimeout(tagTimer);
+      };
     }
     if (phase === 'done') {
       setShowName(true);
       setShowRole(true);
+      setShowTag(true);
     }
   }, [phase]);
 
@@ -46,12 +66,12 @@ const Tagline = ({ phase, scrollY, videoHeight }) => {
       style={{ opacity: wrapperOpacity, transition: "opacity 0.3s ease-out" }}
     >
       <div className="flex flex-col md:flex-row h-full items-center justify-center md:justify-between">
-        {/* NAME */}
+        {/* NAME (Left) */}
         <p
           className={`
             ${baseColor}
-            text-[18px] 2xl:text-[32px] font-medium tracking-[-0.01em]
-            text-center md:text-left md:w-1/2
+            text-[28px] 2xl:text-[32px] font-medium tracking-[-0.01em]
+            text-center md:text-left md:w-1/3
             transition-all duration-500
             ${showName ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
           `}
@@ -59,19 +79,37 @@ const Tagline = ({ phase, scrollY, videoHeight }) => {
           ARSLAN MASLESA
         </p>
 
-        <div className="h-30 md:hidden" />
+        {/* Spacer for mobile */}
+        <div className="h-20 md:hidden" />
 
-        {/* ROLE */}
+        {/* ROLE (Center) */}
         <p
           className={`
             ${baseColor}
-            text-[18px] 2xl:text-[32px] font-medium tracking-[-0.01em]
-            text-center md:text-left md:w-1/2
+            text-[28px] 2xl:text-[32px] font-medium tracking-[-0.01em]
+            text-center md:w-1/3
             transition-all duration-500
             ${showRole ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
           `}
         >
           PRODUCT DESIGNER
+        </p>
+
+        {/* Spacer for mobile */}
+        <div className="h-20 md:hidden" />
+
+        {/* ROTATING TAG (Right) */}
+        <p
+          className={`
+            ${baseColor}
+            text-[28px] 2xl:text-[32px] font-medium tracking-[-0.01em]
+            text-center md:text-right md:w-1/3
+            transition-all duration-500
+            ${showTag ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
+          `}
+          key={words[currentWordIndex]} // Ensure smooth transition for word change
+        >
+          {words[currentWordIndex]}
         </p>
       </div>
     </div>
