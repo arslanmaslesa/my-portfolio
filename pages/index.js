@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Navbar from "../components/Navbar";
 import Loader from "../components/Loader";
 import HeroVideo from "../components/HeroVideo";
@@ -10,33 +10,36 @@ import SarajevoTagline from "../components/SarajevoTagline";
 
 export default function Home() {
   const taglineText =
-    "Product designer based in Sarajevo, turning complex ideas into simple experiences.";
+    "Product designer based in Sarajevo, turning complex ideas into simple, intuitive, and lasting experiences.";
 
+  const aboutTexts = [
+    `Hi, I’m Arslan. I love immersing myself in architecture, film, music and culture, all of which inspire how I approach design.`,
+    `I enjoy the energy of working with others, bouncing ideas around, shaping them together, and refining until the details feel just right.`,
+  ];
+
+  // stable refs
   const taglineRef = useRef(null);
+  const aboutRefs = useRef(aboutTexts.map(() => React.createRef())).current;
 
-  // Refs
+  // offsets for about sections (absolute document offsets)
+  const [aboutOffsets, setAboutOffsets] = useState(() => Array(aboutTexts.length).fill(null));
+
   const lastScrollYRef = useRef(0);
   const vwRef = useRef(0);
   const vhRef = useRef(0);
-  const extraRef = useRef(0);
   const lenisRef = useRef(null);
   const sequenceStartedRef = useRef(false);
   const needScrollResetRef = useRef(true);
 
-  // Loader state
   const [domReady, setDomReady] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
   const [progress, setProgress] = useState(0);
   const totalSteps = 2;
 
-  // Intro (video expand) animation
   const [intro, setIntro] = useState({ playing: false, done: false });
-  const [clipScale, setClipScale] = useState(0); // Lifted state for clipScale
-
-  // Tagline phases
+  const [clipScale, setClipScale] = useState(0);
   const [taglinePhase, setTaglinePhase] = useState('idle'); // 'idle' | 'intro' | 'done'
 
-  // UI state
   const [ui, setUi] = useState({
     scale: 1,
     scrollY: 0,
@@ -163,7 +166,6 @@ export default function Home() {
     sequenceStartedRef.current = true;
 
     setTaglinePhase("intro");
-
     const t1 = setTimeout(() => {
       setTaglinePhase("done");
       const t2 = setTimeout(() => {
@@ -189,9 +191,6 @@ export default function Home() {
       vwRef.current = vw;
       vhRef.current = vh;
 
-      const isTallScreen = vh > vw * 1.2;
-      extraRef.current = isTallScreen ? 0 : vh * 0.3;
-
       setUi((prev) => ({ ...prev, stickyTop: Math.max(0, vh - 120) }));
     };
 
@@ -199,6 +198,30 @@ export default function Home() {
     window.addEventListener("resize", recomputeStaticThings);
     return () => window.removeEventListener("resize", recomputeStaticThings);
   }, []);
+
+  /* ---------------- Compute about section absolute offsets ---------------- */
+  useEffect(() => {
+    if (!domReady) return;
+
+    const computeOffsets = () => {
+      const offsets = aboutRefs.map((r) => {
+        const el = r.current;
+        if (!el) return null;
+        const rect = el.getBoundingClientRect();
+        const absTop = window.scrollY + rect.top; // absolute document top
+        return Math.round(absTop);
+      });
+      setAboutOffsets(offsets);
+    };
+
+    // compute after a small tick so layout settles
+    const t = setTimeout(computeOffsets, 50);
+    window.addEventListener('resize', computeOffsets);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('resize', computeOffsets);
+    };
+  }, [domReady, aboutRefs]);
 
   /* ---------------- Lenis (scroll engine) ---------------- */
   useEffect(() => {
@@ -208,9 +231,6 @@ export default function Home() {
 
     const commitScrollState = () => {
       const y = lastScrollYRef.current;
-      const vw = vwRef.current;
-      const vh = vhRef.current;
-
       const scale = 1;
 
       setUi((prev) => ({ ...prev, scale, scrollY: y }));
@@ -258,6 +278,7 @@ export default function Home() {
       <div className="fixed top-0 left-0 w-full z-[9999]">
         <Navbar />
       </div>
+
       <HeroVideo
         scale={ui.scale}
         introPlaying={intro.playing}
@@ -266,18 +287,16 @@ export default function Home() {
         setClipScale={setClipScale}
         onVideoReady={() => setVideoReady(true)}
       />
+
       <Tagline
         phase={taglinePhase}
         scrollY={ui.scrollY}
         videoHeight={vhRef.current}
         clipScale={clipScale}
       />
-      <div
-        className="relative z-0 bg-white"
-        style={{
-          height: "300vh",
-        }}
-      >
+
+      {/* Intro Sarajevo tagline */}
+      <div className="relative z-0 bg-white" style={{ height: "300vh" }}>
         <div
           className="sticky top-0 w-screen h-screen flex items-center justify-center"
           style={{
@@ -289,12 +308,36 @@ export default function Home() {
           <SarajevoTagline
             text={taglineText}
             scrollY={ui.scrollY}
-            videoHeight={vhRef.current}
             refObj={taglineRef}
+            triggerOffset={vhRef.current} // start after hero (viewport height)
           />
         </div>
       </div>
+
       <ProjectSection />
+
+      {/* About sections with per-word fade */}
+      {aboutTexts.map((text, idx) => (
+        <div key={idx} className="relative z-0 bg-white" style={{ height: "200vh" }}>
+          <div
+            ref={aboutRefs[idx]}
+            className="sticky top-0 w-screen h-screen flex items-center justify-center"
+            style={{
+              opacity: 1,
+              transition: "opacity 0.45s ease",
+              zIndex: 5,
+            }}
+          >
+            <SarajevoTagline
+              text={text}
+              scrollY={ui.scrollY}
+              refObj={aboutRefs[idx]}
+              // only pass triggerOffset once we've computed it; otherwise undefined
+              triggerOffset={aboutOffsets[idx] ?? undefined}
+            />
+          </div>
+        </div>
+      ))}
     </main>
   );
 }

@@ -19,7 +19,7 @@ const Tagline = ({ phase, scrollY, videoHeight }) => {
   const [showTag, setShowTag] = useState(false);
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
 
-  const words = ['USER-FOCUSED', 'CREATIVE', 'FUNCTIONAL', 'ELEGANT', 'IMPACTFUL'];
+  const words = ['USER-FOCUSED', 'FUNCTIONAL', 'CURIOUS', 'ADAPTIVE', 'DETAIL-ORIENTED'];
 
   // Handle word rotation every 2 seconds
   useEffect(() => {
@@ -35,8 +35,11 @@ const Tagline = ({ phase, scrollY, videoHeight }) => {
   useEffect(() => {
     if (phase === 'intro') {
       setShowName(true);
-      const roleTimer = setTimeout(() => setShowRole(true), 400);
-      const tagTimer = setTimeout(() => setShowTag(true), 800);
+
+      // swapped timings: rotating tag comes before role
+      const tagTimer = setTimeout(() => setShowTag(true), 400);
+      const roleTimer = setTimeout(() => setShowRole(true), 800);
+
       return () => {
         clearTimeout(roleTimer);
         clearTimeout(tagTimer);
@@ -49,7 +52,7 @@ const Tagline = ({ phase, scrollY, videoHeight }) => {
     }
   }, [phase]);
 
-  // Fade out once scrollY > 35% of hero video height
+  // Fade out once scrollY > 30% of hero video height
   const fadeStart = videoHeight * 0.30;
   const wrapperOpacity =
     phase === 'intro'
@@ -70,7 +73,7 @@ const Tagline = ({ phase, scrollY, videoHeight }) => {
         <p
           className={`
             ${baseColor}
-            text-[28px] 2xl:text-[32px] font-medium tracking-[-0.01em]
+            text-[24px] 2xl:text-[32px] font-medium tracking-[-0.01em]
             text-center md:text-left md:w-1/3
             transition-all duration-500
             ${showName ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
@@ -82,34 +85,34 @@ const Tagline = ({ phase, scrollY, videoHeight }) => {
         {/* Spacer for mobile */}
         <div className="h-20 md:hidden" />
 
-        {/* ROLE (Center) */}
+        {/* ROTATING TAG (Center) */}
         <p
           className={`
             ${baseColor}
-            text-[28px] 2xl:text-[32px] font-medium tracking-[-0.01em]
+            text-[24px] 2xl:text-[32px] font-medium tracking-[-0.01em]
             text-center md:w-1/3
             transition-all duration-500
-            ${showRole ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
+            ${showTag ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
           `}
+          key={words[currentWordIndex]}
         >
-          PRODUCT DESIGNER
+          {words[currentWordIndex]}
         </p>
 
         {/* Spacer for mobile */}
         <div className="h-20 md:hidden" />
 
-        {/* ROTATING TAG (Right) */}
+        {/* ROLE (Right) */}
         <p
           className={`
             ${baseColor}
-            text-[28px] 2xl:text-[32px] font-medium tracking-[-0.01em]
+            text-[24px] 2xl:text-[32px] font-medium tracking-[-0.01em]
             text-center md:text-right md:w-1/3
             transition-all duration-500
-            ${showTag ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
+            ${showRole ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
           `}
-          key={words[currentWordIndex]} // Ensure smooth transition for word change
         >
-          {words[currentWordIndex]}
+          PRODUCT DESIGNER
         </p>
       </div>
     </div>

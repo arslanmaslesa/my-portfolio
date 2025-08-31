@@ -148,7 +148,7 @@ const ProjectCard = ({ image, title, video, subtitles, showSoundButton = true, s
                   return (
                     <span
   key={i}
-  className={`mt-2 inline-block bg-black text-white text-[12px] font-medium px-6 py-3 rounded-[8px] transform opacity-0 translate-y-2 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 ${poppins.className}`}
+  className={`mt-2 inline-block bg-black text-white text-[12px] font-medium px-4 py-2 rounded-[8px] transform opacity-0 translate-y-2 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 ${poppins.className}`}
   style={{ transitionDelay: `${delay}ms`, willChange: 'transform, opacity' }}
 >
   {s}
@@ -160,8 +160,8 @@ const ProjectCard = ({ image, title, video, subtitles, showSoundButton = true, s
           )}
 
           {/* Title overlay (keeps higher z-index within the wrapper) */}
-          <div className={`pl-6 2xl:pl-12 pr-2 2xl:pr-4 py-2 2xl:py-4 gap-3 inline-flex items-center w-fit h-fit rounded-[8px] bg-white z-10 ${poppins.className}`}>
-            <p className="text-black text-[16px] 2xl:text-[24px] font-semibold leading-none whitespace-nowrap">
+          <div className={`pl-4 2xl:pl-12 pr-2 2xl:pr-4 py-2 2xl:py-4 gap-4 inline-flex items-center w-fit h-fit rounded-[8px] bg-white z-10 ${poppins.className}`}>
+            <p className="text-black text-[16px] 2xl:text-[24px] font-medium leading-none whitespace-nowrap">
               {title}
             </p>
             <div className="h-9 w-9 2xl:h-16 2xl:w-16 rounded-full bg-[#E6E6E6] flex items-center justify-center transition-colors duration-500 group-hover:bg-black">
