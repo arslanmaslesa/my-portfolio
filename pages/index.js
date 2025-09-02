@@ -8,6 +8,7 @@ import Tagline from "../components/Tagline";
 import ProjectSection from "../components/ProjectSection";
 import SarajevoTagline from "../components/SarajevoTagline";
 import AboutSection from "../components/AboutSection";
+import ContactFooter from "../components/ContactFooter";
 
 export default function Home() {
   const taglineText =
@@ -268,6 +269,7 @@ export default function Home() {
   return (
     <main className="bg-white min-h-[300vh] relative">
       <Loader progress={progress} done={isLoaded} />
+
       <div className="fixed top-0 left-0 w-full z-[9999]">
         <Navbar />
       </div>
@@ -315,6 +317,12 @@ export default function Home() {
   aboutOffsets={aboutOffsets}
   ui={ui}
 />
+
+<div className="relative h-screen">
+  {/* content here — container is 100vh and positioned relative */}
+</div>
+
+<ContactFooter />
 
     </main>
   );

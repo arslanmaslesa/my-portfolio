@@ -49,12 +49,13 @@ export default function AboutSection({ aboutTexts, aboutRefs, aboutOffsets, ui }
     <div
       ref={sectionRef}
       className="relative"
-      style={{ height: "400vh", cursor: hovering ? "none" : "auto" }}
+      style={{ height: "300vh", cursor: hovering ? "none" : "auto" }}
     >
       {/* Sticky image overlay */}
-      <div className="sticky top-0 h-0 z-20">
-        <div className="absolute top-0 left-0 w-screen h-screen pointer-events-none">
-          <CanvasImagePile />
+      <div className="sticky top-0 h-0 z-20 pointer-events-none">
+        {/* Canvas wrapper with pointer-events auto so it can detect mouse */}
+        <div className="absolute top-0 left-0 w-screen h-screen pointer-events-auto">
+          <CanvasImagePile mousePos={clampedPos} />
         </div>
       </div>
 
