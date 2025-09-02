@@ -13,8 +13,17 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
   const objsRef = useRef([]);
   const mouseRef = useRef({ x: -9999, y: -9999 });
 
+  // Keep some "instance" refs for values that may change on re-init
+  const mountedRef = useRef(false);
+  const DPRRef = useRef(1);
+  const isMobileRef = useRef(false);
+  const allowInteractionRef = useRef(true);
+  const resizeDebounceRef = useRef(null);
+
   useEffect(() => {
     let mounted = true;
+    mountedRef.current = true;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -27,15 +36,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
       return { DRAW_SIZE: 140, LOW_RES: 160, HIGH_RES: 280 };
     };
 
-    // Adapt DPR
-    const rawDPR = Math.max(1, window.devicePixelRatio || 1);
-    const isMobile =
-      typeof window !== 'undefined' &&
-      (window.matchMedia ? window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches : window.innerWidth <= MOBILE_BREAKPOINT);
-    const DPR = isMobile ? Math.min(rawDPR, 1.5) : rawDPR;
-
-    let { DRAW_SIZE, LOW_RES, HIGH_RES } = getSizes();
-    let IMG_SIZE = HIGH_RES;
+    // physics / drawing constants (kept from your original)
     const CORNER_RADIUS = 8;
     const MOUSE_RADIUS = 300;
     const MOUSE_STRENGTH = 12000;
@@ -43,7 +44,6 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
     const GRAVITY = 1200;
     const RESTITUTION = 0.5;
     const COLLISION_E = 0.62;
-    const CELL_SIZE = () => DRAW_SIZE * 1.4;
     const MAX_VEL = 2500;
 
     const FIXED_STEP = 1 / 60;
@@ -61,7 +61,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
     const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
     const CONCURRENCY = 4;
 
-    // Load image to offscreen canvas
+    // --- image loading utilities (kept, small tweak: accept explicit size param) ---
     const loadImageToCanvas = async (src, size) => {
       try {
         const img = new Image();
@@ -113,12 +113,11 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
       }
     };
 
-    // Limited concurrency loader
     const loadInBatches = async (sources, size) => {
       const results = new Array(sources.length);
       let i = 0;
       const workers = new Array(CONCURRENCY).fill(null).map(async () => {
-        while (i < sources.length && mounted) {
+        while (i < sources.length && mountedRef.current) {
           const cur = i++;
           results[cur] = await loadImageToCanvas(sources[cur], size);
         }
@@ -128,12 +127,59 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
     };
 
     const runDuringIdle = (fn) => {
-      if (!mounted) return;
-      if ('requestIdleCallback' in window) window.requestIdleCallback(() => mounted && fn(), { timeout: 2000 });
-      else setTimeout(() => mounted && fn(), 300);
+      if (!mountedRef.current) return;
+      if ('requestIdleCallback' in window) window.requestIdleCallback(() => mountedRef.current && fn(), { timeout: 2000 });
+      else setTimeout(() => mountedRef.current && fn(), 300);
     };
 
-    // resizeCanvas updates canvas backing store and recalculates sizes and object geometry
+    // Stateful layout values (will be updated inside init/resize)
+    let DRAW_SIZE = 110;
+    let LOW_RES = 128;
+    let HIGH_RES = 220;
+    let IMG_SIZE = HIGH_RES;
+    const CELL_SIZE = () => DRAW_SIZE * 1.4;
+
+    // --- mouse/touch handlers; we will only attach these when interactions are allowed ---
+    const getMousePosCSS = (clientX, clientY) => {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: clientX - rect.left,
+        y: clientY - rect.top
+      };
+    };
+
+    const onMouseMove = (e) => {
+      const pos = getMousePosCSS(e.clientX, e.clientY);
+      if (pos.x >= 0 && pos.x <= canvas.clientWidth && pos.y >= 0 && pos.y <= canvas.clientHeight) {
+        mouseRef.current.x = pos.x;
+        mouseRef.current.y = pos.y;
+      } else {
+        mouseRef.current.x = -9999;
+        mouseRef.current.y = -9999;
+      }
+    };
+
+    const onTouchMove = (e) => {
+      // NOTE: if interactions are disabled on mobile, this will never be attached
+      if (e.touches && e.touches[0]) {
+        const t = e.touches[0];
+        const pos = getMousePosCSS(t.clientX, t.clientY);
+        if (pos.x >= 0 && pos.x <= canvas.clientWidth && pos.y >= 0 && pos.y <= canvas.clientHeight) {
+          mouseRef.current.x = pos.x;
+          mouseRef.current.y = pos.y;
+        } else {
+          mouseRef.current.x = -9999;
+          mouseRef.current.y = -9999;
+        }
+      }
+    };
+
+    const onLeave = () => {
+      mouseRef.current.x = -9999;
+      mouseRef.current.y = -9999;
+    };
+
+    // Resize handling (also used on orientation change). This updates sizes and clamps objects.
     const resizeCanvas = () => {
       const cssW = window.innerWidth;
       const cssH = window.innerHeight;
@@ -144,14 +190,20 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
       HIGH_RES = s.HIGH_RES;
       IMG_SIZE = HIGH_RES;
 
-      // Set CSS size and backing store (DPR-aware)
+      // recompute DPR using mobile heuristic (limit DPR on mobile to avoid huge backing store)
+      const rawDPR = Math.max(1, window.devicePixelRatio || 1);
+      const isMobile = typeof window !== 'undefined' && (window.matchMedia ? window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches : window.innerWidth <= MOBILE_BREAKPOINT);
+      isMobileRef.current = isMobile;
+      DPRRef.current = isMobile ? Math.min(rawDPR, 1.5) : rawDPR;
+
+      // CSS size and backing store
       canvas.style.width = cssW + 'px';
       canvas.style.height = cssH + 'px';
-      canvas.width = Math.round(cssW * DPR);
-      canvas.height = Math.round(cssH * DPR);
+      canvas.width = Math.round(cssW * DPRRef.current);
+      canvas.height = Math.round(cssH * DPRRef.current);
 
-      // Set transform so we can work in CSS pixels
-      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      // set transform so drawing uses CSS pixels
+      ctx.setTransform(DPRRef.current, 0, 0, DPRRef.current, 0, 0);
 
       // update each object's geometry so drawing uses the new DRAW_SIZE
       for (let o of objsRef.current) {
@@ -165,62 +217,53 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
       }
     };
 
-    // Convert clientX/clientY -> canvas-local CSS pixels (not DPR-scaled)
-    const getMousePosCSS = (clientX, clientY) => {
-      const rect = canvas.getBoundingClientRect();
-      return {
-        x: clientX - rect.left,
-        y: clientY - rect.top
-      };
+    // Reset objects positions (useful after big layout changes)
+    const resetObjectsPositions = () => {
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      objsRef.current = (objsRef.current.length ? objsRef.current : []).map((o) => ({
+        // keep previous image canvas if exists, otherwise placeholder will be replaced later
+        img: o && o.img ? o.img : null,
+        x: Math.random() * (W - DRAW_SIZE) + DRAW_SIZE / 2,
+        y: -20 - Math.random() * 300,
+        vx: (Math.random() - 0.5) * 160,
+        vy: (Math.random() - 0.5) * 40,
+        angle: (Math.random() - 0.5) * Math.PI,
+        va: (Math.random() - 0.5) * 1.8,
+        w: DRAW_SIZE,
+        h: DRAW_SIZE,
+        r: DRAW_SIZE * 0.5,
+        mass: 1 + Math.random() * 0.6,
+        sleepTimer: 0,
+        asleep: false,
+      }));
     };
 
-    // Handlers attached to canvas only
-    const onMouseMove = (e) => {
-      const pos = getMousePosCSS(e.clientX, e.clientY);
-      if (pos.x >= 0 && pos.x <= canvas.clientWidth && pos.y >= 0 && pos.y <= canvas.clientHeight) {
-        mouseRef.current.x = pos.x;
-        mouseRef.current.y = pos.y;
-      } else {
-        mouseRef.current.x = -9999;
-        mouseRef.current.y = -9999;
-      }
-    };
-    const onTouchMove = (e) => {
-      if (e.touches && e.touches[0]) {
-        const t = e.touches[0];
-        const pos = getMousePosCSS(t.clientX, t.clientY);
-        if (pos.x >= 0 && pos.x <= canvas.clientWidth && pos.y >= 0 && pos.y <= canvas.clientHeight) {
-          mouseRef.current.x = pos.x;
-          mouseRef.current.y = pos.y;
-        } else {
-          mouseRef.current.x = -9999;
-          mouseRef.current.y = -9999;
-        }
-      }
-    };
-    const onLeave = () => {
-      mouseRef.current.x = -9999;
-      mouseRef.current.y = -9999;
-    };
+    // --- physics & rendering (unchanged algorithm-wise) ---
+    const clearGrid = () => { /* will be set in init scope */ };
+    // We'll define collidePair, physicsStep, render, loop inside init where constants exist
+    // so they can capture DRAW_SIZE, DPRRef, etc.
 
-    (async () => {
-      const selectedSrcs = isMobile ? srcs.slice(0, MOBILE_COUNT) : srcs;
+    // --- initialization function: load low-res, create objects, start loop ---
+    let cancelLoop = false;
+    const init = async () => {
+      // detect allowInteraction: disable on touch-capable devices (user requested no interactions on mobile)
+      const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+      allowInteractionRef.current = !isTouchDevice;
+
+      // compute sizes & DPR and set canvas
+      resizeCanvas();
+
+      // choose sources (fewer on mobile)
+      const selectedSrcs = isMobileRef.current ? srcs.slice(0, MOBILE_COUNT) : srcs;
 
       // load low-res first
       const lowResCanvases = await loadInBatches(selectedSrcs, LOW_RES);
-      if (!mounted) return;
+      if (!mountedRef.current) return;
 
-      // initial sizing + listeners
-      resizeCanvas();
-      window.addEventListener('resize', resizeCanvas, { passive: true });
-      canvas.addEventListener('mousemove', onMouseMove, { passive: true });
-      canvas.addEventListener('touchmove', onTouchMove, { passive: true });
-      canvas.addEventListener('mouseleave', onLeave);
-
-      // Use CSS-pixel-based W/H for physics initial state (consistent with ctx transform)
+      // initial objects (use low res canvases for img)
       const W = window.innerWidth;
       const H = window.innerHeight;
-
       objsRef.current = lowResCanvases.map((imgCanvas) => ({
         img: imgCanvas,
         x: Math.random() * (W - DRAW_SIZE) + DRAW_SIZE / 2,
@@ -237,21 +280,34 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
         asleep: false,
       }));
 
-      // upgrade to high-res when idle
+      // attach listeners (only when interactions allowed)
+      if (allowInteractionRef.current) {
+        canvas.addEventListener('mousemove', onMouseMove, { passive: true });
+        // allow touchmove on devices that support pointer interaction only if interactions are enabled,
+        // but because user said "no interactions on mobile", we won't attach touch listeners when touch detected
+        canvas.addEventListener('touchmove', onTouchMove, { passive: true });
+        canvas.addEventListener('mouseleave', onLeave);
+      } else {
+        // ensure mouse not active
+        mouseRef.current.x = -9999;
+        mouseRef.current.y = -9999;
+      }
+
+      // upgrade to high-res when idle (and again on resizes/orientation)
       runDuringIdle(async () => {
+        if (!mountedRef.current) return;
         const highResCanvases = await loadInBatches(selectedSrcs, HIGH_RES);
-        if (!mounted) return;
-        for (let k = 0; k < highResCanvases.length && mounted; k++) {
+        if (!mountedRef.current) return;
+        for (let k = 0; k < highResCanvases.length && mountedRef.current; k++) {
           if (objsRef.current[k]) objsRef.current[k].img = highResCanvases[k];
         }
       });
 
-      // Physics + rendering (kept your logic, using CSS pixels)
+      // Physics + rendering
       let lastTime = performance.now();
       let accumulator = 0;
       let grid = {};
 
-      const clearGrid = () => { grid = {}; };
       const cellKey = (cx, cy) => `${cx}:${cy}`;
 
       const insertToGrid = (obj, idx) => {
@@ -392,7 +448,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
           } else o.sleepTimer = 0;
         }
 
-        clearGrid();
+        grid = {};
         for (let i = 0; i < objs.length; i++) insertToGrid(objs[i], i);
         for (let iter = 0; iter < COLLISION_ITER; iter++) {
           for (const key in grid) {
@@ -407,9 +463,9 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
       };
 
       const render = () => {
-        // clear (we set transform to DPR so use CSS pixel sizes)
-        ctx.clearRect(0, 0, canvas.width / DPR, canvas.height / DPR);
+        ctx.clearRect(0, 0, canvas.width / DPRRef.current, canvas.height / DPRRef.current);
         for (const o of objsRef.current) {
+          if (!o || !o.img) continue;
           ctx.save();
           ctx.translate(o.x, o.y);
           ctx.rotate(o.angle);
@@ -437,6 +493,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
       };
 
       const loop = (now) => {
+        if (!mountedRef.current) return;
         const frameDt = Math.min((now - lastTime) / 1000, 0.25);
         lastTime = now;
         accumulator += frameDt;
@@ -457,18 +514,83 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
         rafRef.current = requestAnimationFrame(loop);
       };
 
+      // start loop
       rafRef.current = requestAnimationFrame(loop);
-    })();
+    }; // end init
 
-    return () => {
-      mounted = false;
+    // Set up initial run
+    init();
+
+    // Debounced re-init / responsive handler:
+    const handleResponsiveChange = () => {
+      // debounce to avoid thrash on continuous resize / orientation events
+      if (resizeDebounceRef.current) clearTimeout(resizeDebounceRef.current);
+      resizeDebounceRef.current = setTimeout(() => {
+        if (!mountedRef.current) return;
+
+        // Recalculate sizes & DPR & resize canvas immediately
+        resizeCanvas();
+
+        // If interaction capability changed (touch vs non-touch) - re-init to attach/detach listeners properly
+        const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+        const newAllowInteraction = !isTouchDevice;
+        if (newAllowInteraction !== allowInteractionRef.current) {
+          // full re-init: remove listeners + reset state then init again
+          teardown();
+          // small delay to ensure teardown finished
+          setTimeout(() => {
+            if (!mountedRef.current) return;
+            init();
+          }, 40);
+        } else {
+          // Not changing interaction mode. We still should:
+          // - clamp positions
+          for (let o of objsRef.current) {
+            if (!o) continue;
+            o.w = DRAW_SIZE;
+            o.h = DRAW_SIZE;
+            o.r = DRAW_SIZE * 0.5;
+            o.x = Math.min(Math.max(o.x, o.w / 2), window.innerWidth - o.w / 2);
+            o.y = Math.min(Math.max(o.y, o.h / 2), window.innerHeight - o.h / 2);
+          }
+
+          // - Trigger a high-res reload (DPR or sizes may have changed)
+          runDuringIdle(async () => {
+            const selectedSrcs = isMobileRef.current ? srcs.slice(0, MOBILE_COUNT) : srcs;
+            const highResCanvases = await loadInBatches(selectedSrcs, HIGH_RES);
+            if (!mountedRef.current) return;
+            for (let k = 0; k < highResCanvases.length && mountedRef.current; k++) {
+              if (objsRef.current[k]) objsRef.current[k].img = highResCanvases[k];
+            }
+          });
+        }
+      }, 120);
+    };
+
+    // teardown function to remove listeners and stop animation
+    const teardown = () => {
+      mountedRef.current = false;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      window.removeEventListener('resize', resizeCanvas);
-      if (canvas) {
+      rafRef.current = null;
+      try {
         canvas.removeEventListener('mousemove', onMouseMove);
         canvas.removeEventListener('touchmove', onTouchMove);
         canvas.removeEventListener('mouseleave', onLeave);
-      }
+      } catch (e) {}
+    };
+
+    // listen to resize and orientation
+    window.addEventListener('resize', handleResponsiveChange, { passive: true });
+    window.addEventListener('orientationchange', handleResponsiveChange, { passive: true });
+
+    // cleanup on unmount
+    return () => {
+      mounted = false;
+      mountedRef.current = false;
+      if (resizeDebounceRef.current) clearTimeout(resizeDebounceRef.current);
+      window.removeEventListener('resize', handleResponsiveChange);
+      window.removeEventListener('orientationchange', handleResponsiveChange);
+      teardown();
     };
   }, [srcs]);
 

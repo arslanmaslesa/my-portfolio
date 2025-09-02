@@ -11,12 +11,22 @@ export default function AboutSection({ aboutTexts, aboutRefs, aboutOffsets, ui }
   const [cursorPos, setCursorPos] = useState({ x: -9999, y: -9999 });
   const [clampedPos, setClampedPos] = useState({ x: -9999, y: -9999 });
   const [hovering, setHovering] = useState(false);
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
 
   const CURSOR_SIZE = 80; // px
   const EDGE_PADDING = CURSOR_SIZE / 2; // safe padding from edges
 
-  // Mouse events
+  // Detect touch devices
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsTouchDevice("ontouchstart" in window || navigator.maxTouchPoints > 0);
+    }
+  }, []);
+
+  // Mouse events (only on non-touch devices)
+  useEffect(() => {
+    if (isTouchDevice) return;
+
     const section = sectionRef.current;
     if (!section) return;
 
@@ -33,31 +43,32 @@ export default function AboutSection({ aboutTexts, aboutRefs, aboutOffsets, ui }
       section.removeEventListener("mouseenter", onMouseEnter);
       section.removeEventListener("mouseleave", onMouseLeave);
     };
-  }, []);
+  }, [isTouchDevice]);
 
   // Clamp cursor position safely on the client
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (isTouchDevice || typeof window === "undefined") return;
 
     const clampX = Math.min(Math.max(cursorPos.x, EDGE_PADDING), window.innerWidth - EDGE_PADDING);
     const clampY = Math.min(Math.max(cursorPos.y, EDGE_PADDING), window.innerHeight - EDGE_PADDING);
 
     setClampedPos({ x: clampX, y: clampY });
-  }, [cursorPos]);
+  }, [cursorPos, isTouchDevice]);
 
   return (
     <div
       ref={sectionRef}
       className="relative"
-      style={{ height: "300vh", cursor: hovering ? "none" : "auto" }}
+      style={{ height: "300vh", cursor: hovering && !isTouchDevice ? "none" : "auto" }}
     >
       {/* Sticky image overlay */}
-      <div className="sticky top-0 h-0 z-20 pointer-events-none">
-        {/* Canvas wrapper with pointer-events auto so it can detect mouse */}
-        <div className="absolute top-0 left-0 w-screen h-screen pointer-events-auto">
-          <CanvasImagePile mousePos={clampedPos} />
+      {!isTouchDevice && (
+        <div className="sticky top-0 h-0 z-20 pointer-events-none">
+          <div className="absolute top-0 left-0 w-screen h-screen pointer-events-auto">
+            <CanvasImagePile mousePos={clampedPos} />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* About sections */}
       {aboutTexts.map((text, idx) => (
@@ -82,7 +93,7 @@ export default function AboutSection({ aboutTexts, aboutRefs, aboutOffsets, ui }
       ))}
 
       {/* Custom cursor */}
-      {hovering && (
+      {!isTouchDevice && hovering && (
         <div
           ref={cursorRef}
           className="fixed pointer-events-none z-50 w-20 h-20"
