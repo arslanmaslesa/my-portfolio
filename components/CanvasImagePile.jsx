@@ -2,7 +2,11 @@
 
 import React, { useEffect, useRef } from 'react';
 
+// Keep the full set of 35 image paths, but the component will use only
+// 10 on smaller screens (<= 768px). Change MOBILE_BREAKPOINT if you
+// prefer a different threshold.
 const DEFAULT_IMAGES = Array.from({ length: 35 }).map((_, i) => `/proj${(i % 5) + 1}.png`);
+const MOBILE_BREAKPOINT = 768; // px
 
 export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
   const canvasRef = useRef(null);
@@ -65,9 +69,9 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
                 const ir = iw / ih;
                 const or = 1;
                 let sx = 0, sy = 0, sw = iw, sh = ih;
-                if (ir > or) { sw = ih * or; sx = (iw - sw) / 2; } 
+                if (ir > or) { sw = ih * or; sx = (iw - sw) / 2; }
                 else { sh = iw / or; sy = (ih - sh) / 2; }
-                try { octx.drawImage(img, sx, sy, sw, sh, 0, 0, IMG_SIZE, IMG_SIZE); } 
+                try { octx.drawImage(img, sx, sy, sw, sh, 0, 0, IMG_SIZE, IMG_SIZE); }
                 catch { octx.drawImage(img, 0, 0, IMG_SIZE, IMG_SIZE); }
                 resolve(off);
               };
@@ -99,7 +103,11 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
     const onLeave = () => { mouseRef.current.x = -9999; mouseRef.current.y = -9999; };
 
     (async () => {
-      const imgs = await loadAndScale(srcs);
+      // detect mobile/smaller screens on client and limit to 10 images if matched
+      const isClientMobile = typeof window !== 'undefined' && (window.matchMedia ? window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches : window.innerWidth <= MOBILE_BREAKPOINT);
+      const selectedSrcs = isClientMobile ? srcs.slice(0, 12) : srcs;
+
+      const imgs = await loadAndScale(selectedSrcs);
       if (!mounted) return;
 
       resizeCanvas();
