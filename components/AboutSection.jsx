@@ -61,14 +61,12 @@ export default function AboutSection({ aboutTexts, aboutRefs, aboutOffsets, ui }
       className="relative"
       style={{ height: "300vh", cursor: hovering && !isTouchDevice ? "none" : "auto" }}
     >
-      {/* Sticky image overlay */}
-      {!isTouchDevice && (
-        <div className="sticky top-0 h-0 z-20 pointer-events-none">
-          <div className="absolute top-0 left-0 w-screen h-screen pointer-events-auto">
-            <CanvasImagePile mousePos={clampedPos} />
-          </div>
+      {/* Sticky image overlay - always rendered; CanvasImagePile disables interactions on touch */}
+      <div className="sticky top-0 h-0 z-20 pointer-events-none">
+        <div className="absolute top-0 left-0 w-screen h-screen pointer-events-auto">
+          <CanvasImagePile mousePos={clampedPos} />
         </div>
-      )}
+      </div>
 
       {/* About sections */}
       {aboutTexts.map((text, idx) => (
@@ -92,7 +90,7 @@ export default function AboutSection({ aboutTexts, aboutRefs, aboutOffsets, ui }
         </div>
       ))}
 
-      {/* Custom cursor */}
+      {/* Custom cursor (desktop only) */}
       {!isTouchDevice && hovering && (
         <div
           ref={cursorRef}
