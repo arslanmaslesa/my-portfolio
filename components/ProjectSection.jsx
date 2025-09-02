@@ -3,7 +3,7 @@ import ProjectCard from "./ProjectCard";
 import cn from "../utils/cn";
 
 const PROJECTS = [
-  { id: 1, image: '/proj1.png', title: 'Appo Landing Page', skills: ['Figma', 'UI/UX', 'Next.js'] },
+  { id: 1, image: '/proj1.png', title: 'Appo Website', skills: ['Figma', 'UI/UX', 'Next.js'] },
   { id: 2, image: '/proj2.png', title: 'Appo', skills: ['Figma', 'Flutter', 'Prototyping'] },
   { 
     id: 3, 
@@ -23,7 +23,7 @@ const PROJECTS = [
     showSoundButton: false,
     skills: ['Illustration', 'Cover Design', 'Amazon Kindle']
   },
-  { id: 5, image: '/proj5.png', title: 'Kapetanovina Visit Card', skills: ['Branding', 'Print', 'Illustrator'] },
+  { id: 5, image: '/proj5.png', title: 'Hotel Kapetanovina', skills: ['Branding', 'Print', 'Illustrator'] },
 ];
 
 const itemHeight = 'h-[calc(100vw-108px)] md:h-[calc((100vw-64px)/2-44px)]';

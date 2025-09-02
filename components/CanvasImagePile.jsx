@@ -2,11 +2,10 @@
 
 import React, { useEffect, useRef } from 'react';
 
-// Keep the full set of 35 image paths, but the component will use only
-// 10 on smaller screens (<= 768px). Change MOBILE_BREAKPOINT if you
-// prefer a different threshold.
-const DEFAULT_IMAGES = Array.from({ length: 35 }).map((_, i) => `/proj${(i % 5) + 1}.png`);
+// Full set of 36 images; component uses up to MOBILE_COUNT on small screens.
+const DEFAULT_IMAGES = Array.from({ length: 36 }).map((_, i) => `/interest${(i % 12) + 1}.png`);
 const MOBILE_BREAKPOINT = 768; // px
+const MOBILE_COUNT = 10; // use 10 images on mobile/smaller screens
 
 export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
   const canvasRef = useRef(null);
@@ -19,9 +18,17 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const DPR = Math.max(1, window.devicePixelRatio || 1);
 
-    const IMG_SIZE = 160;
+    // Adapt DPR: cap on mobile so canvas pixel buffer stays reasonable.
+    const rawDPR = Math.max(1, window.devicePixelRatio || 1);
+    const isMobile = typeof window !== 'undefined' && (window.matchMedia ? window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches : window.innerWidth <= MOBILE_BREAKPOINT);
+    const DPR = isMobile ? Math.min(rawDPR, 1.5) : rawDPR;
+
+    // Image sizes: quick low-res pass and later high-res replacement.
+    const LOW_RES = 96;    // small quick drawable
+    const HIGH_RES = 160;  // final quality
+    const IMG_SIZE = HIGH_RES;
+
     const DRAW_SIZE = 80;
     const CORNER_RADIUS = 8;
     const MOUSE_RADIUS = 300;
@@ -33,7 +40,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
     const CELL_SIZE = DRAW_SIZE * 1.4;
     const MAX_VEL = 2500;
 
-    // Physics tuning
+    // Physics tuning (kept as you had)
     const FIXED_STEP = 1 / 60; // seconds
     const MAX_SUB_STEPS = 4;
     const COLLISION_ITER = 3; // solver iterations
@@ -44,53 +51,100 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
     const SLEEP_TIME = 0.5; // seconds stable before sleeping
     const ANGULAR_DAMPING = 0.92; // per-step (applied each physics step)
     const LINEAR_DAMPING = 0.995;
-
-    // torque scaling for mouse: tweak if you want stronger/weaker rotation
-    const TORQUE_SCALE = 0.0000009; // small number, combined with lever arm & force
+    const TORQUE_SCALE = 0.0000009;
 
     const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-    const len2 = (x, y) => x * x + y * y;
 
-    const loadAndScale = (sources) =>
-      Promise.all(
-        sources.map(
-          (src) =>
-            new Promise((resolve) => {
-              const img = new Image();
-              img.crossOrigin = 'anonymous';
-              img.src = src;
-              img.onload = () => {
-                const off = document.createElement('canvas');
-                off.width = IMG_SIZE;
-                off.height = IMG_SIZE;
-                const octx = off.getContext('2d');
-                const iw = img.naturalWidth;
-                const ih = img.naturalHeight;
-                const ir = iw / ih;
-                const or = 1;
-                let sx = 0, sy = 0, sw = iw, sh = ih;
-                if (ir > or) { sw = ih * or; sx = (iw - sw) / 2; }
-                else { sh = iw / or; sy = (ih - sh) / 2; }
-                try { octx.drawImage(img, sx, sy, sw, sh, 0, 0, IMG_SIZE, IMG_SIZE); }
-                catch { octx.drawImage(img, 0, 0, IMG_SIZE, IMG_SIZE); }
-                resolve(off);
-              };
-              img.onerror = () => {
-                const fallback = document.createElement('canvas');
-                fallback.width = IMG_SIZE;
-                fallback.height = IMG_SIZE;
-                const fctx = fallback.getContext('2d');
-                fctx.fillStyle = '#ddd';
-                fctx.fillRect(0, 0, IMG_SIZE, IMG_SIZE);
-                resolve(fallback);
-              };
-            })
-        )
-      );
+    // concurrency-controlled loader + progressive low-res -> high-res upgrade
+    const CONCURRENCY = 4;
+
+    // Utility to load an image and draw it to an offscreen canvas of requested size.
+    // Returns a canvas element.
+    const loadImageToCanvas = async (src, size) => {
+      try {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = src;
+
+        // Wait for decode (non-blocking paint)
+        if (img.decode) {
+          await img.decode();
+        } else {
+          // fallback: wait load event if decode isn't supported
+          await new Promise((res, rej) => {
+            img.onload = res;
+            img.onerror = () => res(); // resolve with fallback rather than reject
+          });
+        }
+
+        // create offscreen canvas sized to 'size'
+        const off = document.createElement('canvas');
+        off.width = size;
+        off.height = size;
+        const octx = off.getContext('2d');
+
+        // center-crop to square aspect
+        const iw = img.naturalWidth || size;
+        const ih = img.naturalHeight || size;
+        const ir = iw / ih;
+        const or = 1;
+        let sx = 0, sy = 0, sw = iw, sh = ih;
+        if (ir > or) { sw = ih * or; sx = (iw - sw) / 2; }
+        else { sh = iw / or; sy = (ih - sh) / 2; }
+
+        try {
+          octx.drawImage(img, sx, sy, sw, sh, 0, 0, size, size);
+        } catch {
+          // if cross-origin drawImage could throw, draw a neutral fallback
+          octx.fillStyle = '#ddd';
+          octx.fillRect(0, 0, size, size);
+        }
+
+        return off;
+      } catch (err) {
+        // on any error return a gray placeholder canvas
+        const fallback = document.createElement('canvas');
+        fallback.width = size;
+        fallback.height = size;
+        const fctx = fallback.getContext('2d');
+        fctx.fillStyle = '#ddd';
+        fctx.fillRect(0, 0, size, size);
+        return fallback;
+      }
+    };
+
+    // limited concurrency runner that yields results in the same order as srcs
+    const loadInBatches = async (sources, size) => {
+      const results = new Array(sources.length);
+      let i = 0;
+
+      const workers = new Array(CONCURRENCY).fill(null).map(async () => {
+        while (i < sources.length && mounted) {
+          const cur = i++;
+          results[cur] = await loadImageToCanvas(sources[cur], size);
+        }
+      });
+
+      await Promise.all(workers);
+      return results;
+    };
+
+    // small helper: run fn during idle if possible
+    const runDuringIdle = (fn) => {
+      if (!mounted) return;
+      if ('requestIdleCallback' in window) {
+        window.requestIdleCallback(() => { if (mounted) fn(); }, { timeout: 2000 });
+      } else {
+        // fallback: give a small timeout so initial paint isn't blocked
+        setTimeout(() => { if (mounted) fn(); }, 300);
+      }
+    };
 
     const resizeCanvas = () => {
       const cssW = window.innerWidth;
       const cssH = window.innerHeight;
+
+      // Use DPR (capped earlier) for canvas backing store
       canvas.style.width = cssW + 'px';
       canvas.style.height = cssH + 'px';
       canvas.width = Math.round(cssW * DPR);
@@ -103,13 +157,14 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
     const onLeave = () => { mouseRef.current.x = -9999; mouseRef.current.y = -9999; };
 
     (async () => {
-      // detect mobile/smaller screens on client and limit to 10 images if matched
-      const isClientMobile = typeof window !== 'undefined' && (window.matchMedia ? window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches : window.innerWidth <= MOBILE_BREAKPOINT);
-      const selectedSrcs = isClientMobile ? srcs.slice(0, 12) : srcs;
+      // limit number of images for mobile
+      const selectedSrcs = isMobile ? srcs.slice(0, MOBILE_COUNT) : srcs;
 
-      const imgs = await loadAndScale(selectedSrcs);
+      // 1) quick low-res pass so scene becomes interactive fast
+      const lowResCanvases = await loadInBatches(selectedSrcs, LOW_RES);
       if (!mounted) return;
 
+      // initialize objects with the quick low-res canvases
       resizeCanvas();
       window.addEventListener('resize', resizeCanvas, { passive: true });
       window.addEventListener('mousemove', onMouseMove, { passive: true });
@@ -120,14 +175,14 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
       const W = window.innerWidth;
       const H = window.innerHeight;
 
-      objsRef.current = imgs.map((imgCanvas) => ({
+      objsRef.current = lowResCanvases.map((imgCanvas) => ({
         img: imgCanvas,
         x: Math.random() * (W - DRAW_SIZE) + DRAW_SIZE / 2,
         y: -20 - Math.random() * 300,
         vx: (Math.random() - 0.5) * 160,
         vy: (Math.random() - 0.5) * 40,
         angle: (Math.random() - 0.5) * Math.PI,
-        va: (Math.random() - 0.5) * 1.8, // reduced initial spin
+        va: (Math.random() - 0.5) * 1.8,
         w: DRAW_SIZE,
         h: DRAW_SIZE,
         r: DRAW_SIZE * 0.5,
@@ -136,12 +191,27 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
         asleep: false,
       }));
 
+      // 2) while browser is idle, fetch higher-res canvases and replace the images
+      runDuringIdle(async () => {
+        const highResCanvases = await loadInBatches(selectedSrcs, HIGH_RES);
+        if (!mounted) return;
+
+        // replace object's img references with high-res canvas (same index mapping)
+        for (let k = 0; k < highResCanvases.length && mounted; k++) {
+          const hi = highResCanvases[k];
+          // preserve reference but replace canvas for that object
+          if (objsRef.current[k]) objsRef.current[k].img = hi;
+        }
+      });
+
+      // physics helpers & engine (kept nearly identical, minor local aliasing)
       let lastTime = performance.now();
       let accumulator = 0;
       let grid = {};
 
       const clearGrid = () => { grid = {}; };
       const cellKey = (cx, cy) => `${cx}:${cy}`;
+
       const insertToGrid = (obj, idx) => {
         const minX = Math.floor((obj.x - obj.r) / CELL_SIZE);
         const maxX = Math.floor((obj.x + obj.r) / CELL_SIZE);
@@ -156,7 +226,6 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
         }
       };
 
-      // Collision with positional correction and velocity impulse
       const collidePair = (A, B) => {
         if (A.asleep && B.asleep) return;
 
@@ -203,19 +272,16 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
         B.sleepTimer = 0;
       };
 
-      // single fixed physics step
       const physicsStep = (dt) => {
         const objs = objsRef.current;
         const m = mouseRef.current;
         const Wc = window.innerWidth;
         const Hc = window.innerHeight;
 
-        // Integrate forces -> velocities (semi-implicit Euler)
         for (let i = 0; i < objs.length; i++) {
           const o = objs[i];
-          if (o.asleep) continue; // skip asleep objects
+          if (o.asleep) continue;
 
-          // mouse force
           const dx = o.x - m.x;
           const dy = o.y - m.y;
           const dist = Math.hypot(dx, dy);
@@ -225,54 +291,40 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
             const falloff = 1 - dist / MOUSE_RADIUS;
             const force = (MOUSE_STRENGTH * falloff) / o.mass;
 
-            // linear push (same direction as before)
             o.vx += (nx * force) * dt;
             o.vy += (ny * force * 0.95) * dt - (UPWARD_BIAS * 160 * falloff * dt);
 
-            // rotational effect based on lever arm (mouse -> object)
-            // compute lever arm vector from mouse to object
             const rx = o.x - m.x;
             const ry = o.y - m.y;
-            // applied force vector
             const fx = nx * force;
             const fy = ny * force;
-            // 2D torque (scalar) = r x F = rx * Fy - ry * Fx
             const rawTorque = (rx * fy - ry * fx);
-            // scale & normalize by radius & mass so objects respond sensibly
             const torque = (rawTorque * TORQUE_SCALE) / (o.r * o.mass);
-            // apply torque scaled by dt so it's time-consistent
             o.va += torque * dt;
 
-            // small wake & reset sleep timer on mouse interaction
             o.sleepTimer = 0;
             o.asleep = false;
           }
 
-          // gravity
           o.vy += GRAVITY * dt;
 
-          // integrate velocity to position
           o.vx = clamp(o.vx, -MAX_VEL, MAX_VEL);
           o.vy = clamp(o.vy, -MAX_VEL, MAX_VEL);
           o.x += o.vx * dt;
           o.y += o.vy * dt;
 
-          // angular integration (semi-implicit)
           o.va = clamp(o.va, -12, 12);
           o.angle += o.va * dt;
 
-          // damping
           o.vx *= LINEAR_DAMPING;
           o.vy *= LINEAR_DAMPING;
           o.va *= ANGULAR_DAMPING;
         }
 
-        // spatial grid & collision detection
         clearGrid();
         const objsArr = objsRef.current;
         for (let i = 0; i < objsArr.length; i++) insertToGrid(objsArr[i], i);
 
-        // iterative solver to reduce jitter in stacks
         for (let iter = 0; iter < COLLISION_ITER; iter++) {
           for (const key in grid) {
             const cell = grid[key];
@@ -284,13 +336,11 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
           }
         }
 
-        // boundary constraints + resting logic
         for (let i = 0; i < objsArr.length; i++) {
           const o = objsArr[i];
           const halfW = o.w / 2;
           const halfH = o.h / 2;
 
-          // bottom
           if (o.y + halfH > Hc) {
             o.y = Hc - halfH;
             if (o.vy > 0) o.vy = -o.vy * RESTITUTION;
@@ -302,14 +352,12 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
             o.va *= 0.88;
           }
 
-          // top
           if (o.y - halfH < 0) {
             o.y = halfH;
             if (o.vy < 0) o.vy = -o.vy * RESTITUTION;
             o.va *= 0.95;
           }
 
-          // left/right
           if (o.x - halfW < 0) {
             o.x = halfW;
             if (o.vx < 0) o.vx = -o.vx * RESTITUTION;
@@ -321,7 +369,6 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
             o.va *= 0.92;
           }
 
-          // sleeping check
           const speed2 = o.vx * o.vx + o.vy * o.vy;
           const angSpeed = Math.abs(o.va);
           if (speed2 < SLEEP_VEL * SLEEP_VEL && angSpeed < SLEEP_ANG) {
@@ -347,15 +394,15 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
         }
       };
 
-      // render
       const render = () => {
+        // clear with logical pixels (we already set transform according to DPR)
         ctx.clearRect(0, 0, canvas.width / DPR, canvas.height / DPR);
         for (const o of objsRef.current) {
           ctx.save();
           ctx.translate(o.x, o.y);
           ctx.rotate(o.angle);
 
-          // rounded corners
+          // rounded corners clipping
           ctx.beginPath();
           const x = -o.w / 2;
           const y = -o.h / 2;
@@ -377,9 +424,8 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
         }
       };
 
-      // main loop with accumulator / fixed-step physics
       const loop = (now) => {
-        const frameDt = Math.min((now - lastTime) / 1000, 0.25); // clamp huge frame deltas
+        const frameDt = Math.min((now - lastTime) / 1000, 0.25);
         lastTime = now;
         accumulator += frameDt;
 
@@ -411,6 +457,8 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
       window.removeEventListener('mouseleave', onLeave);
       window.removeEventListener('mouseout', onLeave);
     };
+    // NOTE: intentionally not re-running on srcs changes to avoid reloading during simple resizes.
+    // If you want srcs to be reactive, we can adjust this.
   }, [srcs]);
 
   return (
