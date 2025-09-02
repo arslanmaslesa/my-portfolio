@@ -7,7 +7,7 @@ const DEFAULT_IMAGES = Array.from({ length: 36 }).map((_, i) => `/interest${(i %
 const MOBILE_BREAKPOINT = 768; // px
 const MOBILE_COUNT = 12; // use 12 images on mobile/smaller screens
 
-export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
+export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = true }) {
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
   const objsRef = useRef([]);
@@ -36,7 +36,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
       return { DRAW_SIZE: 140, LOW_RES: 160, HIGH_RES: 280 };
     };
 
-    // physics / drawing constants (kept from your original)
+    // physics / drawing constants
     const CORNER_RADIUS = 8;
     const MOUSE_RADIUS = 300;
     const MOUSE_STRENGTH = 12000;
@@ -61,7 +61,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
     const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
     const CONCURRENCY = 4;
 
-    // --- image loading utilities (kept, small tweak: accept explicit size param) ---
+    // --- image loading utilities ---
     const loadImageToCanvas = async (src, size) => {
       try {
         const img = new Image();
@@ -132,7 +132,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
       else setTimeout(() => mountedRef.current && fn(), 300);
     };
 
-    // Stateful layout values (will be updated inside init/resize)
+    // Stateful layout values
     let DRAW_SIZE = 110;
     let LOW_RES = 128;
     let HIGH_RES = 220;
@@ -160,7 +160,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
     };
 
     const onTouchMove = (e) => {
-      // NOTE: if interactions are disabled on mobile, this will never be attached
+      // NOTE: this will only be attached if interactions are allowed
       if (e.touches && e.touches[0]) {
         const t = e.touches[0];
         const pos = getMousePosCSS(t.clientX, t.clientY);
@@ -179,7 +179,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
       mouseRef.current.y = -9999;
     };
 
-    // Resize handling (also used on orientation change). This updates sizes and clamps objects.
+    // Resize handling
     const resizeCanvas = () => {
       const cssW = window.innerWidth;
       const cssH = window.innerHeight;
@@ -217,12 +217,11 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
       }
     };
 
-    // Reset objects positions (useful after big layout changes)
+    // Reset objects positions
     const resetObjectsPositions = () => {
       const W = window.innerWidth;
       const H = window.innerHeight;
       objsRef.current = (objsRef.current.length ? objsRef.current : []).map((o) => ({
-        // keep previous image canvas if exists, otherwise placeholder will be replaced later
         img: o && o.img ? o.img : null,
         x: Math.random() * (W - DRAW_SIZE) + DRAW_SIZE / 2,
         y: -20 - Math.random() * 300,
@@ -239,17 +238,12 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
       }));
     };
 
-    // --- physics & rendering (unchanged algorithm-wise) ---
-    const clearGrid = () => { /* will be set in init scope */ };
-    // We'll define collidePair, physicsStep, render, loop inside init where constants exist
-    // so they can capture DRAW_SIZE, DPRRef, etc.
-
     // --- initialization function: load low-res, create objects, start loop ---
     let cancelLoop = false;
     const init = async () => {
-      // detect allowInteraction: disable on touch-capable devices (user requested no interactions on mobile)
+      // detect allowInteraction: combine component prop with platform capability
       const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-      allowInteractionRef.current = !isTouchDevice;
+      allowInteractionRef.current = interactions && !isTouchDevice;
 
       // compute sizes & DPR and set canvas
       resizeCanvas();
@@ -283,12 +277,10 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
       // attach listeners (only when interactions allowed)
       if (allowInteractionRef.current) {
         canvas.addEventListener('mousemove', onMouseMove, { passive: true });
-        // allow touchmove on devices that support pointer interaction only if interactions are enabled,
-        // but because user said "no interactions on mobile", we won't attach touch listeners when touch detected
         canvas.addEventListener('touchmove', onTouchMove, { passive: true });
-        canvas.addEventListener('mouseleave', onLeave);
+        canvas.addEventListener('mouseleave', onLeave, { passive: true });
       } else {
-        // ensure mouse not active
+        // ensure mouse not active and let touches pass through
         mouseRef.current.x = -9999;
         mouseRef.current.y = -9999;
       }
@@ -523,7 +515,6 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
 
     // Debounced re-init / responsive handler:
     const handleResponsiveChange = () => {
-      // debounce to avoid thrash on continuous resize / orientation events
       if (resizeDebounceRef.current) clearTimeout(resizeDebounceRef.current);
       resizeDebounceRef.current = setTimeout(() => {
         if (!mountedRef.current) return;
@@ -533,18 +524,16 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
 
         // If interaction capability changed (touch vs non-touch) - re-init to attach/detach listeners properly
         const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-        const newAllowInteraction = !isTouchDevice;
+        const newAllowInteraction = interactions && !isTouchDevice;
         if (newAllowInteraction !== allowInteractionRef.current) {
           // full re-init: remove listeners + reset state then init again
           teardown();
-          // small delay to ensure teardown finished
           setTimeout(() => {
             if (!mountedRef.current) return;
             init();
           }, 40);
         } else {
-          // Not changing interaction mode. We still should:
-          // - clamp positions
+          // Not changing interaction mode. We still should clamp positions and reload high-res canvases
           for (let o of objsRef.current) {
             if (!o) continue;
             o.w = DRAW_SIZE;
@@ -554,7 +543,6 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
             o.y = Math.min(Math.max(o.y, o.h / 2), window.innerHeight - o.h / 2);
           }
 
-          // - Trigger a high-res reload (DPR or sizes may have changed)
           runDuringIdle(async () => {
             const selectedSrcs = isMobileRef.current ? srcs.slice(0, MOBILE_COUNT) : srcs;
             const highResCanvases = await loadInBatches(selectedSrcs, HIGH_RES);
@@ -592,8 +580,9 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
       window.removeEventListener('orientationchange', handleResponsiveChange);
       teardown();
     };
-  }, [srcs]);
+  }, [srcs, interactions]);
 
+  // When interactions are disabled we allow pointer events to pass through to the page and keep default touch behavior.
   return (
     <canvas
       ref={canvasRef}
@@ -602,7 +591,8 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES }) {
         height: '100vh',
         display: 'block',
         background: 'transparent',
-        touchAction: 'none',
+        touchAction: interactions ? 'none' : 'auto',
+        pointerEvents: interactions ? 'auto' : 'none',
       }}
     />
   );
