@@ -41,7 +41,7 @@ const ProjectCard = ({ image, title, video, subtitles, showSoundButton = true, s
 
   return (
     <div
-      className="relative w-full h-full rounded-[12px] overflow-hidden bg-neutral-100 group"
+      className="relative w-full h-full rounded-[8px] overflow-hidden bg-neutral-100 group"
       onMouseEnter={() => !isTouchDevice && setHovered(true)}
       onMouseLeave={() => !isTouchDevice && setHovered(false)}
     >

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Poppins } from 'next/font/google';
 
@@ -12,21 +12,50 @@ const poppins = Poppins({
 const SarajevoTagline = ({ text, scrollY = 0, refObj = null, triggerOffset }) => {
   const containerRef = useRef(null);
   const wordRefs = useRef([]);
+  const [viewportHeight, setViewportHeight] = useState(800);
+  const startTopRef = useRef(null);
 
-  // NOTE: do NOT assign to refObj.current here — parent should own that ref.
-  // refObj is only *read* if provided.
+  // update viewport height on mount and resize
+  useEffect(() => {
+    const updateVH = () => setViewportHeight(window.innerHeight || 800);
+    updateVH();
+    window.addEventListener('resize', updateVH);
+    return () => window.removeEventListener('resize', updateVH);
+  }, []);
+
+  // compute element absolute top when refObj or DOM changes (used only if triggerOffset not provided)
+  useEffect(() => {
+    const computeStartTop = () => {
+      if (typeof window === 'undefined') return;
+      if (typeof triggerOffset === 'number') {
+        startTopRef.current = triggerOffset;
+        return;
+      }
+      const target = (refObj && refObj.current) ? refObj.current : containerRef.current;
+      if (!target) {
+        startTopRef.current = 0;
+        return;
+      }
+      const rect = target.getBoundingClientRect();
+      startTopRef.current = Math.round(window.scrollY + rect.top);
+    };
+
+    // compute after a tick so layout settles
+    const t = setTimeout(computeStartTop, 50);
+    window.addEventListener('resize', computeStartTop);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('resize', computeStartTop);
+    };
+  }, [refObj, triggerOffset, containerRef.current]);
 
   const words = useMemo(() => text.split(' '), [text]);
-  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
-
-  // Determine fade start using absolute document offset (triggerOffset if provided)
-  const top = (refObj && refObj.current && typeof refObj.current.offsetTop === 'number')
-    ? refObj.current.offsetTop
-    : (containerRef.current ? containerRef.current.offsetTop : 0);
-
-  const startScroll = triggerOffset !== undefined ? triggerOffset : top;
 
   const ANIM_SCROLL_DURATION = viewportHeight * 0.8; // scroll distance for full fade
+
+  const startScroll = (typeof triggerOffset === 'number')
+    ? triggerOffset
+    : (startTopRef.current ?? 0);
 
   // progress 0..1 based on absolute scrollY
   let progress = (scrollY - startScroll) / ANIM_SCROLL_DURATION;
@@ -48,7 +77,7 @@ const SarajevoTagline = ({ text, scrollY = 0, refObj = null, triggerOffset }) =>
       style={{ lineHeight: 1.05, pointerEvents: 'none' }}
     >
       <p
-        className="text-[24px] xl:text-[24px] 2xl:text-[36px]  "
+        className="text-[24px] xl:text-[24px] 2xl:text-[36px]"
         style={{ lineHeight: 1.4, margin: 0 }}
       >
         {words.map((w, i) => {

@@ -7,6 +7,7 @@ import HeroVideo from "../components/HeroVideo";
 import Tagline from "../components/Tagline";
 import ProjectSection from "../components/ProjectSection";
 import SarajevoTagline from "../components/SarajevoTagline";
+import AboutSection from "../components/AboutSection";
 
 export default function Home() {
   const taglineText =
@@ -21,8 +22,10 @@ export default function Home() {
   const taglineRef = useRef(null);
   const aboutRefs = useRef(aboutTexts.map(() => React.createRef())).current;
 
-  // offsets for about sections (absolute document offsets)
-  const [aboutOffsets, setAboutOffsets] = useState(() => Array(aboutTexts.length).fill(null));
+  // offsets for about sections
+  const [aboutOffsets, setAboutOffsets] = useState(() =>
+    Array(aboutTexts.length).fill(null)
+  );
 
   const lastScrollYRef = useRef(0);
   const vwRef = useRef(0);
@@ -38,7 +41,7 @@ export default function Home() {
 
   const [intro, setIntro] = useState({ playing: false, done: false });
   const [clipScale, setClipScale] = useState(0);
-  const [taglinePhase, setTaglinePhase] = useState('idle'); // 'idle' | 'intro' | 'done'
+  const [taglinePhase, setTaglinePhase] = useState("idle");
 
   const [ui, setUi] = useState({
     scale: 1,
@@ -134,12 +137,6 @@ export default function Home() {
     requestAnimationFrame(() => requestAnimationFrame(resetToTop));
   }, [isLoaded]);
 
-  useEffect(() => {
-    if (!lenisRef.current || !isLoaded || !needScrollResetRef.current) return;
-    lenisRef.current.scrollTo(0, { immediate: true });
-    needScrollResetRef.current = false;
-  }, [isLoaded, lenisRef.current]);
-
   /* ---------------- DOM Ready ---------------- */
   useEffect(() => {
     const done = () => setDomReady(true);
@@ -170,19 +167,19 @@ export default function Home() {
       setTaglinePhase("done");
       const t2 = setTimeout(() => {
         setIntro({ playing: true, done: false });
-        setClipScale(1); // Start video animation
+        setClipScale(1);
         const t3 = setTimeout(() => {
           setIntro({ playing: false, done: true });
-        }, 900); // INTRO_DURATION
+        }, 900);
         return () => clearTimeout(t3);
-      }, 300); // 300ms pause before video animation
+      }, 300);
       return () => clearTimeout(t2);
-    }, 1000); // TAGLINE_TO_BLACK_DURATION
+    }, 1000);
 
     return () => clearTimeout(t1);
   }, [isLoaded]);
 
-  /* ---------------- Measure layout (minimal) ---------------- */
+  /* ---------------- Measure layout ---------------- */
   useEffect(() => {
     const recomputeStaticThings = () => {
       const vw = window.innerWidth;
@@ -208,22 +205,20 @@ export default function Home() {
         const el = r.current;
         if (!el) return null;
         const rect = el.getBoundingClientRect();
-        const absTop = window.scrollY + rect.top; // absolute document top
-        return Math.round(absTop);
+        return Math.round(window.scrollY + rect.top);
       });
       setAboutOffsets(offsets);
     };
 
-    // compute after a small tick so layout settles
     const t = setTimeout(computeOffsets, 50);
-    window.addEventListener('resize', computeOffsets);
+    window.addEventListener("resize", computeOffsets);
     return () => {
       clearTimeout(t);
-      window.removeEventListener('resize', computeOffsets);
+      window.removeEventListener("resize", computeOffsets);
     };
   }, [domReady, aboutRefs]);
 
-  /* ---------------- Lenis (scroll engine) ---------------- */
+  /* ---------------- Lenis ---------------- */
   useEffect(() => {
     if (lenisRef.current) return;
 
@@ -231,14 +226,12 @@ export default function Home() {
 
     const commitScrollState = () => {
       const y = lastScrollYRef.current;
-      const scale = 1;
-
-      setUi((prev) => ({ ...prev, scale, scrollY: y }));
+      setUi((prev) => ({ ...prev, scale: 1, scrollY: y }));
       rafId = null;
     };
 
     (async () => {
-      const { default: Lenis } = await import("@studio-freight/lenis");
+      const { default: Lenis } = await import("lenis");
       const lenis = new Lenis({
         lerp: 0.1,
         smooth: true,
@@ -309,35 +302,20 @@ export default function Home() {
             text={taglineText}
             scrollY={ui.scrollY}
             refObj={taglineRef}
-            triggerOffset={vhRef.current} // start after hero (viewport height)
+            triggerOffset={vhRef.current}
           />
         </div>
       </div>
 
       <ProjectSection />
 
-      {/* About sections with per-word fade */}
-      {aboutTexts.map((text, idx) => (
-        <div key={idx} className="relative z-0 bg-white" style={{ height: "200vh" }}>
-          <div
-            ref={aboutRefs[idx]}
-            className="sticky top-0 w-screen h-screen flex items-center justify-center"
-            style={{
-              opacity: 1,
-              transition: "opacity 0.45s ease",
-              zIndex: 5,
-            }}
-          >
-            <SarajevoTagline
-              text={text}
-              scrollY={ui.scrollY}
-              refObj={aboutRefs[idx]}
-              // only pass triggerOffset once we've computed it; otherwise undefined
-              triggerOffset={aboutOffsets[idx] ?? undefined}
-            />
-          </div>
-        </div>
-      ))}
+      <AboutSection
+  aboutTexts={aboutTexts}
+  aboutRefs={aboutRefs}
+  aboutOffsets={aboutOffsets}
+  ui={ui}
+/>
+
     </main>
   );
 }
