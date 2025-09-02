@@ -587,8 +587,8 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
     <canvas
       ref={canvasRef}
       style={{
-        width: '100vw',
-        height: '100vh',
+        width: '100%',
+        height: '100%',
         display: 'block',
         background: 'transparent',
         touchAction: interactions ? 'none' : 'auto',
