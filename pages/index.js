@@ -318,9 +318,7 @@ export default function Home() {
   ui={ui}
 />
 
-<div className="relative h-screen">
-  {/* content here — container is 100vh and positioned relative */}
-</div>
+<div className="relative h-screen w-screen"></div>
 
 <ContactFooter />
 
