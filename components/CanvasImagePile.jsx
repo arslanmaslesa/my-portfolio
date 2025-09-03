@@ -61,7 +61,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
     const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
     const CONCURRENCY = 4;
 
-    // --- image loading utilities ---
+    // --- image loading utilities --- (unchanged)
     const loadImageToCanvas = async (src, size) => {
       try {
         const img = new Image();
@@ -193,10 +193,13 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
       // recompute DPR using mobile heuristic (limit DPR on mobile to avoid huge backing store)
       const rawDPR = Math.max(1, window.devicePixelRatio || 1);
       const isMobile = typeof window !== 'undefined' && (window.matchMedia ? window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches : window.innerWidth <= MOBILE_BREAKPOINT);
+
+      // --- IMPORTANT: update isMobileRef here so callers can detect change ---
       isMobileRef.current = isMobile;
       DPRRef.current = isMobile ? Math.min(rawDPR, 1.5) : rawDPR;
 
       // CSS size and backing store
+      // we set exact CSS px sizing so canvas coordinate mapping stays consistent
       canvas.style.width = cssW + 'px';
       canvas.style.height = cssH + 'px';
       canvas.width = Math.round(cssW * DPRRef.current);
@@ -295,7 +298,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
         }
       });
 
-      // Physics + rendering
+      // Physics + rendering (unchanged)...
       let lastTime = performance.now();
       let accumulator = 0;
       let grid = {};
@@ -519,17 +522,33 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
       resizeDebounceRef.current = setTimeout(() => {
         if (!mountedRef.current) return;
 
-        // Recalculate sizes & DPR & resize canvas immediately
+        // We want to detect if the mobile breakpoint (and thus number of images) changed.
+        const prevIsMobile = isMobileRef.current;
+
+        // Recalculate sizes & DPR & resize canvas immediately (this will update isMobileRef)
         resizeCanvas();
+
+        // If we crossed the mobile breakpoint (i.e., mobile count changed), do a full re-init
+        if (prevIsMobile !== isMobileRef.current) {
+          // full re-init: remove listeners + reset state then init again
+          teardown();
+          setTimeout(() => {
+            if (!mountedRef.current) return;
+            // re-mount
+            mountedRef.current = true;
+            init();
+          }, 40);
+          return;
+        }
 
         // If interaction capability changed (touch vs non-touch) - re-init to attach/detach listeners properly
         const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
         const newAllowInteraction = interactions && !isTouchDevice;
         if (newAllowInteraction !== allowInteractionRef.current) {
-          // full re-init: remove listeners + reset state then init again
           teardown();
           setTimeout(() => {
             if (!mountedRef.current) return;
+            mountedRef.current = true;
             init();
           }, 40);
         } else {
@@ -583,11 +602,12 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
   }, [srcs, interactions]);
 
   // When interactions are disabled we allow pointer events to pass through to the page and keep default touch behavior.
+  // ======= EDIT: avoid '100vh' width which caused horizontal overflow on orientation changes ========
   return (
     <canvas
       ref={canvasRef}
       style={{
-        width: '100vh',
+        width: '100vw',    // <-- was '100vh' which caused overflow when orientation changed
         height: '100vh',
         display: 'block',
         background: 'transparent',
