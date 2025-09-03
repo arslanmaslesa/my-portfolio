@@ -8,35 +8,45 @@ const MOBILE_BREAKPOINT = 768; // px
 const MOBILE_COUNT = 12; // use 12 images on mobile/smaller screens
 
 export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = true }) {
+  const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
   const objsRef = useRef([]);
   const mouseRef = useRef({ x: -9999, y: -9999 });
 
-  // Keep some "instance" refs for values that may change on re-init
+  // instance refs for mutable state
   const mountedRef = useRef(false);
   const DPRRef = useRef(1);
   const isMobileRef = useRef(false);
   const allowInteractionRef = useRef(true);
   const resizeDebounceRef = useRef(null);
+  const prevPortraitRef = useRef(true);
+  const fadingRef = useRef(false);
 
   useEffect(() => {
-    let mounted = true;
     mountedRef.current = true;
-
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
 
-    // helper: responsive sizes based on viewport
+    // helper to read "logical" viewport using visualViewport when available
+    const getViewport = () => {
+      if (window.visualViewport) {
+        // visualViewport gives the visible layout area excluding overlays
+        return { width: window.visualViewport.width, height: window.visualViewport.height };
+      }
+      return { width: window.innerWidth, height: window.innerHeight };
+    };
+
+    // helper: responsive sizes based on viewport (keep behaviour from your original)
     const getSizes = () => {
-      const base = Math.min(window.innerWidth, window.innerHeight);
+      const base = Math.min(getViewport().width, getViewport().height);
       if (base <= 768) return { DRAW_SIZE: 80, LOW_RES: 96, HIGH_RES: 160 };
       if (base <= 1440) return { DRAW_SIZE: 110, LOW_RES: 128, HIGH_RES: 220 };
       return { DRAW_SIZE: 140, LOW_RES: 160, HIGH_RES: 280 };
     };
 
-    // physics / drawing constants
+    // physics constants (unchanged)
     const CORNER_RADIUS = 8;
     const MOUSE_RADIUS = 300;
     const MOUSE_STRENGTH = 12000;
@@ -61,7 +71,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
     const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
     const CONCURRENCY = 4;
 
-    // --- image loading utilities --- (unchanged)
+    // --- image loading utilities (unchanged) ---
     const loadImageToCanvas = async (src, size) => {
       try {
         const img = new Image();
@@ -139,13 +149,10 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
     let IMG_SIZE = HIGH_RES;
     const CELL_SIZE = () => DRAW_SIZE * 1.4;
 
-    // --- mouse/touch handlers; we will only attach these when interactions are allowed ---
+    // mouse/touch helpers
     const getMousePosCSS = (clientX, clientY) => {
       const rect = canvas.getBoundingClientRect();
-      return {
-        x: clientX - rect.left,
-        y: clientY - rect.top
-      };
+      return { x: clientX - rect.left, y: clientY - rect.top };
     };
 
     const onMouseMove = (e) => {
@@ -160,7 +167,6 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
     };
 
     const onTouchMove = (e) => {
-      // NOTE: this will only be attached if interactions are allowed
       if (e.touches && e.touches[0]) {
         const t = e.touches[0];
         const pos = getMousePosCSS(t.clientX, t.clientY);
@@ -179,10 +185,11 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
       mouseRef.current.y = -9999;
     };
 
-    // Resize handling
+    // Resize handling (now uses visualViewport sizes when present)
     const resizeCanvas = () => {
-      const cssW = window.innerWidth;
-      const cssH = window.innerHeight;
+      const vp = getViewport();
+      const cssW = Math.max(1, Math.floor(vp.width));
+      const cssH = Math.max(1, Math.floor(vp.height));
 
       const s = getSizes();
       DRAW_SIZE = s.DRAW_SIZE;
@@ -190,40 +197,37 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
       HIGH_RES = s.HIGH_RES;
       IMG_SIZE = HIGH_RES;
 
-      // recompute DPR using mobile heuristic (limit DPR on mobile to avoid huge backing store)
+      // recompute DPR with mobile heuristic
       const rawDPR = Math.max(1, window.devicePixelRatio || 1);
-      const isMobile = typeof window !== 'undefined' && (window.matchMedia ? window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches : window.innerWidth <= MOBILE_BREAKPOINT);
-
-      // --- IMPORTANT: update isMobileRef here so callers can detect change ---
+      const isMobile = (window.matchMedia ? window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches : cssW <= MOBILE_BREAKPOINT);
       isMobileRef.current = isMobile;
       DPRRef.current = isMobile ? Math.min(rawDPR, 1.5) : rawDPR;
 
-      // CSS size and backing store
-      // we set exact CSS px sizing so canvas coordinate mapping stays consistent
+      // set CSS size explicitly using viewport dims
       canvas.style.width = cssW + 'px';
       canvas.style.height = cssH + 'px';
       canvas.width = Math.round(cssW * DPRRef.current);
       canvas.height = Math.round(cssH * DPRRef.current);
 
-      // set transform so drawing uses CSS pixels
+      // transform so drawing uses CSS pixels
       ctx.setTransform(DPRRef.current, 0, 0, DPRRef.current, 0, 0);
 
-      // update each object's geometry so drawing uses the new DRAW_SIZE
+      // update each object's geometry and clamp to visible area
       for (let o of objsRef.current) {
         if (!o) continue;
         o.w = DRAW_SIZE;
         o.h = DRAW_SIZE;
         o.r = DRAW_SIZE * 0.5;
-        // clamp positions to visible area (CSS pixels)
-        o.x = Math.min(Math.max(o.x, o.w / 2), window.innerWidth - o.w / 2);
-        o.y = Math.min(Math.max(o.y, o.h / 2), window.innerHeight - o.h / 2);
+        o.x = Math.min(Math.max(o.x, o.w / 2), cssW - o.w / 2);
+        o.y = Math.min(Math.max(o.y, o.h / 2), cssH - o.h / 2);
       }
     };
 
-    // Reset objects positions
+    // Reset objects positions (used on init)
     const resetObjectsPositions = () => {
-      const W = window.innerWidth;
-      const H = window.innerHeight;
+      const vp = getViewport();
+      const W = vp.width;
+      const H = vp.height;
       objsRef.current = (objsRef.current.length ? objsRef.current : []).map((o) => ({
         img: o && o.img ? o.img : null,
         x: Math.random() * (W - DRAW_SIZE) + DRAW_SIZE / 2,
@@ -242,8 +246,9 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
     };
 
     // --- initialization function: load low-res, create objects, start loop ---
-    let cancelLoop = false;
     const init = async () => {
+      if (!mountedRef.current) return;
+
       // detect allowInteraction: combine component prop with platform capability
       const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
       allowInteractionRef.current = interactions && !isTouchDevice;
@@ -259,8 +264,9 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
       if (!mountedRef.current) return;
 
       // initial objects (use low res canvases for img)
-      const W = window.innerWidth;
-      const H = window.innerHeight;
+      const vp = getViewport();
+      const W = vp.width;
+      const H = vp.height;
       objsRef.current = lowResCanvases.map((imgCanvas) => ({
         img: imgCanvas,
         x: Math.random() * (W - DRAW_SIZE) + DRAW_SIZE / 2,
@@ -283,12 +289,11 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
         canvas.addEventListener('touchmove', onTouchMove, { passive: true });
         canvas.addEventListener('mouseleave', onLeave, { passive: true });
       } else {
-        // ensure mouse not active and let touches pass through
         mouseRef.current.x = -9999;
         mouseRef.current.y = -9999;
       }
 
-      // upgrade to high-res when idle (and again on resizes/orientation)
+      // upgrade to high-res when idle
       runDuringIdle(async () => {
         if (!mountedRef.current) return;
         const highResCanvases = await loadInBatches(selectedSrcs, HIGH_RES);
@@ -298,7 +303,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
         }
       });
 
-      // Physics + rendering (unchanged)...
+      // Physics + rendering (copied from your original)
       let lastTime = performance.now();
       let accumulator = 0;
       let grid = {};
@@ -365,8 +370,9 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
       const physicsStep = (dt) => {
         const objs = objsRef.current;
         const m = mouseRef.current;
-        const Wc = window.innerWidth; // CSS pixels
-        const Hc = window.innerHeight;
+        const vp = getViewport();
+        const Wc = vp.width; // CSS pixels
+        const Hc = vp.height;
 
         for (let i = 0; i < objs.length; i++) {
           const o = objs[i];
@@ -513,31 +519,92 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
       rafRef.current = requestAnimationFrame(loop);
     }; // end init
 
-    // Set up initial run
-    init();
+    // teardown function
+    const teardown = () => {
+      mountedRef.current = false;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+      try {
+        canvas.removeEventListener('mousemove', onMouseMove);
+        canvas.removeEventListener('touchmove', onTouchMove);
+        canvas.removeEventListener('mouseleave', onLeave);
+      } catch (e) {}
+    };
 
-    // Debounced re-init / responsive handler:
+    // helper: gentle fade (returns a promise that resolves after fade completes)
+    const fadeOutInDuring = async (fn) => {
+      if (!containerRef.current || fadingRef.current) {
+        // if already fading, just run function directly
+        await fn();
+        return;
+      }
+      fadingRef.current = true;
+      const el = containerRef.current;
+      el.style.transition = 'opacity 180ms ease';
+      el.style.opacity = '0';
+      // wait for fade-out
+      await new Promise((res) => setTimeout(res, 190));
+      try {
+        await fn();
+      } catch (e) {
+        // ignore
+      }
+      el.style.opacity = '1';
+      // wait for fade-in
+      await new Promise((res) => setTimeout(res, 190));
+      fadingRef.current = false;
+    };
+
+    // Debounced responsive handler that also detects portrait <-> landscape flips
     const handleResponsiveChange = () => {
       if (resizeDebounceRef.current) clearTimeout(resizeDebounceRef.current);
-      resizeDebounceRef.current = setTimeout(() => {
+      resizeDebounceRef.current = setTimeout(async () => {
         if (!mountedRef.current) return;
 
-        // We want to detect if the mobile breakpoint (and thus number of images) changed.
         const prevIsMobile = isMobileRef.current;
+        const prevPortrait = prevPortraitRef.current;
 
-        // Recalculate sizes & DPR & resize canvas immediately (this will update isMobileRef)
+        // Recalculate sizes & DPR & resize canvas immediately (this updates isMobileRef)
         resizeCanvas();
 
-        // If we crossed the mobile breakpoint (i.e., mobile count changed), do a full re-init
-        if (prevIsMobile !== isMobileRef.current) {
-          // full re-init: remove listeners + reset state then init again
-          teardown();
-          setTimeout(() => {
-            if (!mountedRef.current) return;
-            // re-mount
-            mountedRef.current = true;
-            init();
-          }, 40);
+        // compute new portrait state using visualViewport if available
+        const vp = getViewport();
+        const newPortrait = vp.width <= vp.height;
+        prevPortraitRef.current = newPortrait;
+
+        // If aspect ratio changed (portrait <> landscape), do a gentle reset so objects re-drop
+        if (newPortrait !== prevPortrait) {
+          await fadeOutInDuring(async () => {
+            // reposition objects to above screen so they fall naturally (zero velocities)
+            const W = vp.width;
+            const H = vp.height;
+            for (let o of objsRef.current) {
+              if (!o) continue;
+              o.x = Math.random() * (W - DRAW_SIZE) + DRAW_SIZE / 2;
+              o.y = -20 - Math.random() * 300;
+              o.vx = 0;
+              o.vy = 0;
+              o.angle = (Math.random() - 0.5) * Math.PI * 0.1;
+              o.va = 0;
+              o.asleep = false;
+              o.sleepTimer = 0;
+              o.w = DRAW_SIZE;
+              o.h = DRAW_SIZE;
+              o.r = DRAW_SIZE * 0.5;
+            }
+
+            // reload high-res canvases in background for the currently selected set
+            runDuringIdle(async () => {
+              const selectedSrcs = isMobileRef.current ? srcs.slice(0, MOBILE_COUNT) : srcs;
+              const highResCanvases = await loadInBatches(selectedSrcs, HIGH_RES);
+              if (!mountedRef.current) return;
+              for (let k = 0; k < highResCanvases.length && mountedRef.current; k++) {
+                if (objsRef.current[k]) objsRef.current[k].img = highResCanvases[k];
+              }
+            });
+          });
+
+          // No further processing needed for this resize (we already handled it)
           return;
         }
 
@@ -551,69 +618,84 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
             mountedRef.current = true;
             init();
           }, 40);
-        } else {
-          // Not changing interaction mode. We still should clamp positions and reload high-res canvases
-          for (let o of objsRef.current) {
-            if (!o) continue;
-            o.w = DRAW_SIZE;
-            o.h = DRAW_SIZE;
-            o.r = DRAW_SIZE * 0.5;
-            o.x = Math.min(Math.max(o.x, o.w / 2), window.innerWidth - o.w / 2);
-            o.y = Math.min(Math.max(o.y, o.h / 2), window.innerHeight - o.h / 2);
-          }
-
-          runDuringIdle(async () => {
-            const selectedSrcs = isMobileRef.current ? srcs.slice(0, MOBILE_COUNT) : srcs;
-            const highResCanvases = await loadInBatches(selectedSrcs, HIGH_RES);
-            if (!mountedRef.current) return;
-            for (let k = 0; k < highResCanvases.length && mountedRef.current; k++) {
-              if (objsRef.current[k]) objsRef.current[k].img = highResCanvases[k];
-            }
-          });
+          return;
         }
+
+        // Not changing interaction mode. We still should clamp positions and reload high-res canvases
+        for (let o of objsRef.current) {
+          if (!o) continue;
+          o.w = DRAW_SIZE;
+          o.h = DRAW_SIZE;
+          o.r = DRAW_SIZE * 0.5;
+          o.x = Math.min(Math.max(o.x, o.w / 2), window.innerWidth - o.w / 2);
+          o.y = Math.min(Math.max(o.y, o.h / 2), window.innerHeight - o.h / 2);
+        }
+
+        runDuringIdle(async () => {
+          const selectedSrcs = isMobileRef.current ? srcs.slice(0, MOBILE_COUNT) : srcs;
+          const highResCanvases = await loadInBatches(selectedSrcs, HIGH_RES);
+          if (!mountedRef.current) return;
+          for (let k = 0; k < highResCanvases.length && mountedRef.current; k++) {
+            if (objsRef.current[k]) objsRef.current[k].img = highResCanvases[k];
+          }
+        });
       }, 120);
     };
 
-    // teardown function to remove listeners and stop animation
-    const teardown = () => {
-      mountedRef.current = false;
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-      try {
-        canvas.removeEventListener('mousemove', onMouseMove);
-        canvas.removeEventListener('touchmove', onTouchMove);
-        canvas.removeEventListener('mouseleave', onLeave);
-      } catch (e) {}
-    };
+    // initial portrait value
+    const initialVP = getViewport();
+    prevPortraitRef.current = initialVP.width <= initialVP.height;
 
-    // listen to resize and orientation
+    // listeners: window resize, orientationchange, visualViewport resize (if present)
     window.addEventListener('resize', handleResponsiveChange, { passive: true });
     window.addEventListener('orientationchange', handleResponsiveChange, { passive: true });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleResponsiveChange, { passive: true });
+      window.visualViewport.addEventListener('scroll', handleResponsiveChange, { passive: true });
+    }
+
+    // start
+    init();
 
     // cleanup on unmount
     return () => {
-      mounted = false;
       mountedRef.current = false;
       if (resizeDebounceRef.current) clearTimeout(resizeDebounceRef.current);
       window.removeEventListener('resize', handleResponsiveChange);
       window.removeEventListener('orientationchange', handleResponsiveChange);
+      if (window.visualViewport) {
+        try {
+          window.visualViewport.removeEventListener('resize', handleResponsiveChange);
+          window.visualViewport.removeEventListener('scroll', handleResponsiveChange);
+        } catch {}
+      }
       teardown();
     };
-  }, [srcs, interactions]);
+  }, [srcs, interactions]); // re-run only if srcs or interactions change
 
-  // When interactions are disabled we allow pointer events to pass through to the page and keep default touch behavior.
-  // ======= EDIT: avoid '100vh' width which caused horizontal overflow on orientation changes ========
+  // container styles: we use a wrapper to animate opacity when resetting
   return (
-    <canvas
-      ref={canvasRef}
+    <div
+      ref={containerRef}
       style={{
-        width: '100vw',    // <-- was '100vh' which caused overflow when orientation changed
+        position: 'relative',
+        width: '100vw', // use viewport width explicitly
         height: '100vh',
+        overflow: 'hidden', // prevents canvas from creating page overflow during transitions
         display: 'block',
-        background: 'transparent',
         touchAction: interactions ? 'none' : 'auto',
-        pointerEvents: interactions ? 'auto' : 'none',
       }}
-    />
+    >
+      <canvas
+        ref={canvasRef}
+        style={{
+          display: 'block',
+          width: '100%', // fill wrapper
+          height: '100%',
+          background: 'transparent',
+          pointerEvents: interactions ? 'auto' : 'none',
+        }}
+      />
+    </div>
   );
 }
