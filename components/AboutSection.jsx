@@ -59,41 +59,44 @@ export default function AboutSection({ aboutTexts, aboutRefs, aboutOffsets, ui }
     <div
       ref={sectionRef}
       className="relative"
-      style={{ height: '300vh', cursor: hovering && !isTouchDevice ? 'none' : 'auto' }}
+      style={{ height: '400vh', cursor: hovering && !isTouchDevice ? 'none' : 'auto' }}
     >
-      {/* Sticky image overlay - always rendered; CanvasImagePile will disable interactions on touch devices when passed the prop */}
+      {/* Sticky image overlay */}
       <div className="sticky top-0 h-0 z-20 pointer-events-none">
         <div
           className="absolute top-0 left-0 w-screen h-screen"
-          // If it's a touch device we force pointer-events:none on the overlay so taps go through to the page
           style={{ pointerEvents: isTouchDevice ? 'none' : 'auto' }}
         >
-          {/* interactions prop: pass false on touch devices */}
           <CanvasImagePile mousePos={clampedPos} interactions={!isTouchDevice} />
         </div>
       </div>
 
       {/* About sections */}
-      {aboutTexts.map((text, idx) => (
-        <div
-          key={idx}
-          className="relative bg-white"
-          style={{ height: '200vh', zIndex: 10 }}
-        >
+      {aboutTexts.map((text, idx) => {
+        // Default height 200vh, but make the second (idx === 1) last 300vh
+        const sectionHeight = idx === 1 ? '300vh' : '200vh';
+
+        return (
           <div
-            ref={aboutRefs[idx]}
-            className="sticky top-0 w-screen h-screen flex items-center justify-center"
-            style={{ opacity: 1, transition: 'opacity 0.45s ease' }}
+            key={idx}
+            className="relative"
+            style={{ height: sectionHeight, zIndex: 10 }}
           >
-            <SarajevoTagline
-              text={text}
-              scrollY={ui.scrollY}
-              refObj={aboutRefs[idx]}
-              triggerOffset={aboutOffsets[idx] ?? undefined}
-            />
+            <div
+              ref={aboutRefs[idx]}
+              className="sticky top-0 w-screen h-screen flex items-center justify-center"
+              style={{ opacity: 1, transition: 'opacity 0.45s ease' }}
+            >
+              <SarajevoTagline
+                text={text}
+                scrollY={ui.scrollY}
+                refObj={aboutRefs[idx]}
+                triggerOffset={aboutOffsets[idx] ?? undefined}
+              />
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {/* Custom cursor (desktop only) */}
       {!isTouchDevice && hovering && (

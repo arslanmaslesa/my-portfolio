@@ -18,6 +18,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
   const mountedRef = useRef(false);
   const DPRRef = useRef(1);
   const isMobileRef = useRef(false);
+  const touchDeviceRef = useRef(false);
   const allowInteractionRef = useRef(true);
   const resizeDebounceRef = useRef(null);
   const prevPortraitRef = useRef(true);
@@ -32,7 +33,6 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
     // helper to read "logical" viewport using visualViewport when available
     const getViewport = () => {
       if (window.visualViewport) {
-        // visualViewport gives the visible layout area excluding overlays
         return { width: window.visualViewport.width, height: window.visualViewport.height };
       }
       return { width: window.innerWidth, height: window.innerHeight };
@@ -46,12 +46,11 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
       return { DRAW_SIZE: 140, LOW_RES: 160, HIGH_RES: 280 };
     };
 
-    // physics constants (unchanged)
+    // physics constants (unchanged except GRAVITY is dynamic per-frame)
     const CORNER_RADIUS = 8;
     const MOUSE_RADIUS = 300;
     const MOUSE_STRENGTH = 12000;
     const UPWARD_BIAS = 1.6;
-    const GRAVITY = 1200;
     const RESTITUTION = 0.5;
     const COLLISION_E = 0.62;
     const MAX_VEL = 2500;
@@ -230,8 +229,9 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
       const H = vp.height;
       objsRef.current = (objsRef.current.length ? objsRef.current : []).map((o) => ({
         img: o && o.img ? o.img : null,
+        // Random inside viewport both horizontally and vertically
         x: Math.random() * (W - DRAW_SIZE) + DRAW_SIZE / 2,
-        y: -20 - Math.random() * 300,
+        y: Math.random() * (H - DRAW_SIZE) + DRAW_SIZE / 2,
         vx: (Math.random() - 0.5) * 160,
         vy: (Math.random() - 0.5) * 40,
         angle: (Math.random() - 0.5) * Math.PI,
@@ -251,6 +251,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
 
       // detect allowInteraction: combine component prop with platform capability
       const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+      touchDeviceRef.current = !!isTouchDevice;
       allowInteractionRef.current = interactions && !isTouchDevice;
 
       // compute sizes & DPR and set canvas
@@ -263,14 +264,14 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
       const lowResCanvases = await loadInBatches(selectedSrcs, LOW_RES);
       if (!mountedRef.current) return;
 
-      // initial objects (use low res canvases for img)
+      // initial objects (use low res canvases for img), spawn randomly inside viewport
       const vp = getViewport();
       const W = vp.width;
       const H = vp.height;
       objsRef.current = lowResCanvases.map((imgCanvas) => ({
         img: imgCanvas,
         x: Math.random() * (W - DRAW_SIZE) + DRAW_SIZE / 2,
-        y: -20 - Math.random() * 300,
+        y: Math.random() * (H - DRAW_SIZE) + DRAW_SIZE / 2,
         vx: (Math.random() - 0.5) * 160,
         vy: (Math.random() - 0.5) * 40,
         angle: (Math.random() - 0.5) * Math.PI,
@@ -303,7 +304,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
         }
       });
 
-      // Physics + rendering (copied from your original)
+      // Physics + rendering (copied from your original with fixes)
       let lastTime = performance.now();
       let accumulator = 0;
       let grid = {};
@@ -374,19 +375,24 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
         const Wc = vp.width; // CSS pixels
         const Hc = vp.height;
 
+        // dynamic gravity: 1200 on mobile or touch-capable devices, else 0
+        const GRAVITY = (isMobileRef.current || touchDeviceRef.current) ? 1200 : 0;
+
         for (let i = 0; i < objs.length; i++) {
           const o = objs[i];
-          if (o.asleep) continue;
 
+          // --- MOUSE / TOUCH PROXIMITY (run for ALL objects, even if asleep) ---
           const dx = o.x - m.x;
           const dy = o.y - m.y;
           const dist = Math.hypot(dx, dy);
           if (dist < MOUSE_RADIUS) {
+            // compute outward normal from pointer to object
             const nx = dist === 0 ? (Math.random() - 0.5) : dx / dist;
             const ny = dist === 0 ? (Math.random() - 0.5) : dy / dist;
             const falloff = 1 - dist / MOUSE_RADIUS;
             const force = (MOUSE_STRENGTH * falloff) / o.mass;
 
+            // apply impulse (wake & push)
             o.vx += (nx * force) * dt;
             o.vy += (ny * force * 0.95) * dt - (UPWARD_BIAS * 160 * falloff * dt);
 
@@ -394,10 +400,15 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
             const torque = (rawTorque * TORQUE_SCALE) / (o.r * o.mass);
             o.va += torque * dt;
 
+            // wake immediately if pointer interacts
             o.sleepTimer = 0;
             o.asleep = false;
           }
 
+          // If still asleep after the pointer check, skip the integration & gravity so it stays put.
+          if (o.asleep) continue;
+
+          // integration
           o.vy += GRAVITY * dt;
           o.vx = clamp(o.vx, -MAX_VEL, MAX_VEL);
           o.vy = clamp(o.vy, -MAX_VEL, MAX_VEL);
@@ -575,13 +586,13 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
         // If aspect ratio changed (portrait <> landscape), do a gentle reset so objects re-drop
         if (newPortrait !== prevPortrait) {
           await fadeOutInDuring(async () => {
-            // reposition objects to above screen so they fall naturally (zero velocities)
+            // reposition objects to random positions inside viewport (zero velocities)
             const W = vp.width;
             const H = vp.height;
             for (let o of objsRef.current) {
               if (!o) continue;
               o.x = Math.random() * (W - DRAW_SIZE) + DRAW_SIZE / 2;
-              o.y = -20 - Math.random() * 300;
+              o.y = Math.random() * (H - DRAW_SIZE) + DRAW_SIZE / 2;
               o.vx = 0;
               o.vy = 0;
               o.angle = (Math.random() - 0.5) * Math.PI * 0.1;
@@ -610,6 +621,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
 
         // If interaction capability changed (touch vs non-touch) - re-init to attach/detach listeners properly
         const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+        touchDeviceRef.current = !!isTouchDevice;
         const newAllowInteraction = interactions && !isTouchDevice;
         if (newAllowInteraction !== allowInteractionRef.current) {
           teardown();
@@ -681,7 +693,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
         position: 'relative',
         width: '100vw', // use viewport width explicitly
         height: '100vh',
-        overflow: 'hidden', // prevents canvas from creating page overflow during transitions
+        // prevents canvas from creating page overflow during transitions
         display: 'block',
         touchAction: interactions ? 'none' : 'auto',
       }}

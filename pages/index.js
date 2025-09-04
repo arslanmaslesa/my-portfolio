@@ -318,7 +318,6 @@ export default function Home() {
   ui={ui}
 />
 
-<div className="relative h-screen w-screen"></div>
 
 <ContactFooter />
 

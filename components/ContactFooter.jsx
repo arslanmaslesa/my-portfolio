@@ -1,107 +1,131 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 
-export default function ContactFooter() {
-  const [status, setStatus] = useState('idle'); // idle | sending | success | error
-  const [errors, setErrors] = useState({});
-  const nameRef = useRef(null);
-  const emailRef = useRef(null);
-  const subjectRef = useRef(null);
+export default function ContactFooter({
+  socials = {
+    email: 'hello@example.com',
+    phone: '+1234567890',
+    linkedin: 'https://www.linkedin.com/in/yourname',
+    github: 'https://github.com/yourname',
+    dribbble: 'https://dribbble.com/yourname',
+    behance: 'https://behance.net/yourname',
+  },
+  onPrimaryClick,
+}) {
+  const year = new Date().getFullYear();
 
-  const validate = () => {
-    const err = {};
-    const email = (emailRef.current?.value || '').trim();
-    const name = (nameRef.current?.value || '').trim();
-    const subject = (subjectRef.current?.value || '').trim();
-
-    if (!name) err.name = 'Please enter your name';
-    if (!email) err.email = 'Please enter your email';
-    else if (!/^\S+@\S+\.\S+$/.test(email)) err.email = 'Enter a valid email';
-    if (!subject) err.subject = 'Please enter a reason';
-
-    setErrors(err);
-    return Object.keys(err).length === 0;
-  };
-
-  const onSubmit = (e) => {
-    e.preventDefault();
-    if (!validate()) return;
-    setStatus('sending');
-
-    setTimeout(() => {
-      if (Math.random() < 0.95) {
-        setStatus('success');
-        nameRef.current.value = '';
-        emailRef.current.value = '';
-        subjectRef.current.value = '';
-      } else {
-        setStatus('error');
-      }
-    }, 700);
+  const handlePrimary = () => {
+    if (typeof onPrimaryClick === 'function') return onPrimaryClick();
+    window.location.href = `mailto:${socials.email}?subject=Lets%20talk`;
   };
 
   return (
-    <footer className="w-full h-full bg-black text-white py-28 px-6">
-      <div className="max-w-3xl mx-auto text-center">
-        <motion.h2
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="text-5xl md:text-6xl font-bold mb-12"
-        >
-          Let's Work
-        </motion.h2>
+    <footer
+      style={{ fontFamily: "'Poppins', sans-serif" }}
+      className="absolute z-100 bg-white text-slate-900 h-screen w-screen flex flex-col"
+    >
+      {/* Load Poppins */}
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+      <link
+        href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet"
+      />
 
-        <motion.form
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          onSubmit={onSubmit}
-          className="grid gap-6"
-        >
-          <div className="grid md:grid-cols-2 gap-4">
-            <input
-              ref={nameRef}
-              placeholder="Your Name"
-              className={`p-4 rounded-lg bg-slate-800 border border-transparent focus:border-indigo-500 outline-none ${
-                errors.name ? 'ring-1 ring-red-500' : ''
-              }`}
-            />
-            <input
-              ref={emailRef}
-              placeholder="Your Email"
-              className={`p-4 rounded-lg bg-slate-800 border border-transparent focus:border-indigo-500 outline-none ${
-                errors.email ? 'ring-1 ring-red-500' : ''
-              }`}
-            />
+      {/* Main content */}
+      <div className="flex-1 max-w-6xl mx-auto px-6 flex flex-col justify-center">
+        {/* Headline */}
+        <div className="w-full flex justify-center mb-20">
+          <motion.button
+            onClick={handlePrimary}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.995 }}
+            className="focus:outline-none"
+            aria-label="Lets Talk"
+          >
+            <motion.h1
+              initial={{ y: 0 }}
+              whileHover={{ y: -6 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+              className="select-none whitespace-nowrap font-normal leading-none text-[6.5rem] sm:text-[8rem] md:text-[9.5rem] lg:text-[10.5rem] text-center tracking-tight text-black"
+              style={{
+                WebkitFontSmoothing: 'antialiased',
+                MozOsxFontSmoothing: 'grayscale',
+              }}
+            >
+              Lets&nbsp;Talk
+            </motion.h1>
+          </motion.button>
+        </div>
+
+        {/* Footer columns */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 text-base text-slate-700 max-w-3xl mx-auto">
+          {/* Contact */}
+          <div>
+            <h4 className="uppercase text-xs text-slate-500 tracking-wider mb-3">
+              Contact
+            </h4>
+            <ul className="space-y-2">
+              <li>
+                <a href={`mailto:${socials.email}`} className="hover:underline">
+                  {socials.email}
+                </a>
+              </li>
+              <li>
+                <a href={`tel:${socials.phone}`} className="hover:underline">
+                  {socials.phone}
+                </a>
+              </li>
+            </ul>
           </div>
 
-          <input
-            ref={subjectRef}
-            placeholder="Reason / Subject"
-            className={`p-4 rounded-lg bg-slate-800 border border-transparent focus:border-indigo-500 outline-none ${
-              errors.subject ? 'ring-1 ring-red-500' : ''
-            }`}
-          />
-
-          <button
-            type="submit"
-            disabled={status === 'sending'}
-            className="bg-indigo-500 hover:bg-indigo-600 transition-colors rounded-lg py-4 font-semibold text-lg disabled:opacity-60"
-          >
-            {status === 'sending' ? 'Sending...' : 'Send Message'}
-          </button>
-
-          {status === 'success' && <p className="text-green-400 mt-2">Message sent! ✅</p>}
-          {status === 'error' && <p className="text-red-400 mt-2">Something went wrong. ❌</p>}
-        </motion.form>
-
-        <p className="mt-12 text-sm text-slate-400">
-          © {new Date().getFullYear()} Your Name — Built with ❤️
-        </p>
+          {/* Socials */}
+          <div>
+            <h4 className="uppercase text-xs text-slate-500 tracking-wider mb-3">
+              Socials
+            </h4>
+            <p className="space-x-6">
+              {['linkedin','github','behance','dribbble'].map((s) => (
+                <a
+                  key={s}
+                  href={socials[s]}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:underline"
+                >
+                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                </a>
+              ))}
+            </p>
+          </div>
+        </div>
       </div>
+
+      {/* Bottom row */}
+      <div className="border-t border-slate-200 px-6 py-6 text-sm flex flex-col md:flex-row items-center justify-between text-slate-500">
+        <div>© {year} Arslan Maslesa — Designed & built by me.</div>
+        <div className="flex gap-6 mt-2 md:mt-0">
+          <a href="/privacy" className="hover:underline">
+            Privacy
+          </a>
+          <a href="/terms" className="hover:underline">
+            Terms
+          </a>
+          <a href="#top" className="hover:underline">
+            Back to top
+          </a>
+        </div>
+      </div>
+
+      {/* Hover shadow for Lets Talk */}
+      <style jsx>{`
+        footer h1:hover {
+          text-shadow: 0 20px 50px rgba(0, 0, 0, 0.08),
+            0 8px 25px rgba(0, 0, 0, 0.06);
+        }
+      `}</style>
     </footer>
   );
 }
