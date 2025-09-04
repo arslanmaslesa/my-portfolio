@@ -202,7 +202,15 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
       isMobileRef.current = isMobile;
       DPRRef.current = isMobile ? Math.min(rawDPR, 1.5) : rawDPR;
 
+      // ensure container clips overflow to avoid 100vw issues on mobile
+      if (containerRef.current) {
+        containerRef.current.style.overflow = 'hidden';
+        containerRef.current.style.maxWidth = '100%';
+        containerRef.current.style.boxSizing = 'border-box';
+      }
+
       // set CSS size explicitly using viewport dims
+      // use style.width/height = cssW/cssH so canvas.clientWidth matches getViewport()
       canvas.style.width = cssW + 'px';
       canvas.style.height = cssH + 'px';
       canvas.width = Math.round(cssW * DPRRef.current);
@@ -211,7 +219,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
       // transform so drawing uses CSS pixels
       ctx.setTransform(DPRRef.current, 0, 0, DPRRef.current, 0, 0);
 
-      // update each object's geometry and clamp to visible area
+      // update each object's geometry and clamp to visible area using viewport dims
       for (let o of objsRef.current) {
         if (!o) continue;
         o.w = DRAW_SIZE;
@@ -222,7 +230,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
       }
     };
 
-    // Reset objects positions (used on init)
+    // Reset objects positions (used on init) - spawn randomly inside viewport
     const resetObjectsPositions = () => {
       const vp = getViewport();
       const W = vp.width;
@@ -422,7 +430,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
           o.vy *= LINEAR_DAMPING;
           o.va *= ANGULAR_DAMPING;
 
-          // Boundaries + sleep
+          // Boundaries + sleep (use viewport dims Wc/Hc)
           const halfW = o.w / 2;
           const halfH = o.h / 2;
 
@@ -639,8 +647,10 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
           o.w = DRAW_SIZE;
           o.h = DRAW_SIZE;
           o.r = DRAW_SIZE * 0.5;
-          o.x = Math.min(Math.max(o.x, o.w / 2), window.innerWidth - o.w / 2);
-          o.y = Math.min(Math.max(o.y, o.h / 2), window.innerHeight - o.h / 2);
+          // use getViewport() dims for clamping (consistent)
+          const vp2 = getViewport();
+          o.x = Math.min(Math.max(o.x, o.w / 2), vp2.width - o.w / 2);
+          o.y = Math.min(Math.max(o.y, o.h / 2), vp2.height - o.h / 2);
         }
 
         runDuringIdle(async () => {
@@ -691,11 +701,13 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
       ref={containerRef}
       style={{
         position: 'relative',
-        width: '100vw', // use viewport width explicitly
+        width: '100%', // use full width but avoid forcing 100vw (prevents mobile viewport overflow)
         height: '100vh',
-        // prevents canvas from creating page overflow during transitions
         display: 'block',
         touchAction: interactions ? 'none' : 'auto',
+        overflow: 'hidden',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
       }}
     >
       <canvas
@@ -706,6 +718,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
           height: '100%',
           background: 'transparent',
           pointerEvents: interactions ? 'auto' : 'none',
+          maxWidth: '100%',
         }}
       />
     </div>
