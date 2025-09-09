@@ -124,7 +124,7 @@ export default function ContactFooter({
       </div>
 
       {/* Footer bottom text */}
-      <div className="flex-none border-t border-white/10 px-6 py-4 text-sm flex items-center justify-center">
+      <div className="flex-none px-6 text-sm flex items-center justify-center">
         <div className="text-center">
           © {year} Arslan Maslesa — Designed and built by me with ❤️
         </div>
