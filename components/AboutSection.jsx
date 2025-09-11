@@ -75,6 +75,32 @@ export default function AboutSection({ aboutTexts, aboutRefs, aboutOffsets, ui }
     };
   }, [isTouchDevice]);
 
+  // Scroll activation for cursor
+  useEffect(() => {
+    if (isTouchDevice) return;
+    const onScroll = () => {
+      const container = containerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const last = lastPointerRef.current;
+      const inside =
+        last.x >= rect.left &&
+        last.x <= rect.right &&
+        last.y >= rect.top &&
+        last.y <= rect.bottom;
+      if (inside) {
+        setHovering(true);
+        setCursorPos({ x: last.x, y: last.y });
+      } else if (hovering) {
+        setHovering(false);
+        setCursorPos({ x: -9999, y: -9999 });
+      }
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [isTouchDevice, hovering]);
+
   // Clamp cursor position
   useEffect(() => {
     if (isTouchDevice || typeof window === 'undefined') return;
