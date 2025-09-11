@@ -10,9 +10,9 @@ const poppins = Poppins({
 export default function ContactFooter({
   socials = {
     email: 'arslanm.design@gmail.com',
-    linkedin: 'https://www.linkedin.com/in/yourname',
-    github: 'https://github.com/yourname',
-    instagram: 'https://instagram.com/yourname',
+    linkedin: 'https://www.linkedin.com/in/arslan-maslesa-a96a54322/',
+    github: 'https://github.com/arslanmaslesa',
+    instagram: 'https://www.instagram.com/arslan_maslesa/',
     cv: '/Arslan_Maslesa_CV.pdf',
   },
   onPrimaryClick,
