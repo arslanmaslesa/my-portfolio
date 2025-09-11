@@ -25,14 +25,14 @@ export default function ContactFooter({
   const [wrapWidth, setWrapWidth] = useState(0);
   const [isVertical, setIsVertical] = useState(false);
   const [isTouch, setIsTouch] = useState(false);
+  const [bubbleCount, setBubbleCount] = useState(3);
 
   const wrapRef = useRef(null);
   const linksRef = useRef(null);
-
   const measureTimerRef = useRef(null);
   const lastIsVerticalRef = useRef(isVertical);
 
-  // Detect touch devices
+  // Detect touch devices and set bubble count
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const touchSupported =
@@ -40,6 +40,13 @@ export default function ContactFooter({
         navigator.maxTouchPoints > 0 ||
         navigator.msMaxTouchPoints > 0;
       setIsTouch(touchSupported);
+
+      const updateBubbles = () => {
+        setBubbleCount(window.innerWidth < 640 ? 1 : 3);
+      };
+      updateBubbles();
+      window.addEventListener('resize', updateBubbles);
+      return () => window.removeEventListener('resize', updateBubbles);
     }
   }, []);
 
@@ -111,10 +118,12 @@ export default function ContactFooter({
         isTouch ? 'touch' : ''
       }`}
     >
-      <div className="flex-1 flex flex-col items-center justify-center">
+      {/* Parent container adjusted for mobile left alignment */}
+      <div className={`flex-1 flex flex-col justify-center w-full ${bubbleCount === 1 ? 'items-start' : 'items-center'}`}>
         {/* Let's Talk segment */}
         <div
-          className="letsWrap inline-flex flex-col items-center gap-8 select-none cursor-pointer"
+          className={`letsWrap inline-flex flex-col gap-8 select-none cursor-pointer 
+            ${bubbleCount === 1 ? 'items-start text-left w-full' : 'items-center text-center w-auto'}`}
           onClick={handlePrimary}
           role="button"
           aria-label="Let's Talk"
@@ -122,9 +131,12 @@ export default function ContactFooter({
         >
           <div
             ref={wrapRef}
-            className="headlineWrap relative inline-flex flex-col items-center"
+            className="headlineWrap relative inline-flex flex-col"
           >
-            <div className="inline-flex items-baseline gap-3">
+            <div
+              className={`inline-flex items-baseline gap-3 
+                ${bubbleCount === 1 ? 'justify-start w-full' : 'justify-center'}`}
+            >
               <h1
                 className="letsText m-0 text-black"
                 style={{
@@ -148,7 +160,7 @@ export default function ContactFooter({
               </h1>
 
               <div className="bubbles inline-flex items-baseline pl-3 gap-3" aria-hidden>
-                {[0, 1, 2].map((n) => (
+                {Array.from({ length: bubbleCount }).map((_, n) => (
                   <span
                     key={n}
                     className="bubble w-12 h-12 rounded-full bg-[#eaeaea]"
@@ -175,16 +187,18 @@ export default function ContactFooter({
 
         {/* Links row */}
         <nav
-          className="linksRow mt-8"
+          className="linksRow mt-8 w-full"
           aria-label="contact links"
-          style={{ width: wrapWidth ? `${wrapWidth}px` : 'auto' }}
+          style={{ width: wrapWidth && bubbleCount !== 1 ? `${wrapWidth}px` : 'auto' }}
         >
           <ul
             ref={linksRef}
-            className={`w-full ${
+            className={`flex w-full gap-2 ${
               isVertical
-                ? 'flex flex-col items-start gap-2 text-[20px]'
-                : 'flex justify-between text-base'
+                ? 'flex-col items-start text-[20px]'
+                : bubbleCount === 1
+                  ? 'justify-end text-base'
+                  : 'justify-between text-base'
             }`}
           >
             {links.map((link, i) => (
