@@ -70,6 +70,9 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
     const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
     const CONCURRENCY = 4;
 
+    // Safety padding to prevent clipping at edges
+    const BOUNDARY_PADDING = 20; // px - adjust to taste
+
     // --- image loading utilities (unchanged) ---
     const loadImageToCanvas = async (src, size) => {
       try {
@@ -225,8 +228,9 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
         o.w = DRAW_SIZE;
         o.h = DRAW_SIZE;
         o.r = DRAW_SIZE * 0.5;
-        o.x = Math.min(Math.max(o.x, o.w / 2), cssW - o.w / 2);
-        o.y = Math.min(Math.max(o.y, o.h / 2), cssH - o.h / 2);
+        // clamp with padding
+        o.x = Math.min(Math.max(o.x, o.w / 2 + BOUNDARY_PADDING), cssW - o.w / 2 - BOUNDARY_PADDING);
+        o.y = Math.min(Math.max(o.y, o.h / 2 + BOUNDARY_PADDING), cssH - o.h / 2 - BOUNDARY_PADDING);
       }
     };
 
@@ -235,11 +239,14 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
       const vp = getViewport();
       const W = vp.width;
       const H = vp.height;
+
+      const spawnAreaW = Math.max(0, W - DRAW_SIZE - 2 * BOUNDARY_PADDING);
+      const spawnAreaH = Math.max(0, H - DRAW_SIZE - 2 * BOUNDARY_PADDING);
       objsRef.current = (objsRef.current.length ? objsRef.current : []).map((o) => ({
         img: o && o.img ? o.img : null,
-        // Random inside viewport both horizontally and vertically
-        x: Math.random() * (W - DRAW_SIZE) + DRAW_SIZE / 2,
-        y: Math.random() * (H - DRAW_SIZE) + DRAW_SIZE / 2,
+        // Random inside viewport but leaving BOUNDARY_PADDING margin on all sides
+        x: Math.random() * spawnAreaW + DRAW_SIZE / 2 + BOUNDARY_PADDING,
+        y: Math.random() * spawnAreaH + DRAW_SIZE / 2 + BOUNDARY_PADDING,
         vx: (Math.random() - 0.5) * 160,
         vy: (Math.random() - 0.5) * 40,
         angle: (Math.random() - 0.5) * Math.PI,
@@ -276,10 +283,14 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
       const vp = getViewport();
       const W = vp.width;
       const H = vp.height;
+
+      const spawnAreaW = Math.max(0, W - DRAW_SIZE - 2 * BOUNDARY_PADDING);
+      const spawnAreaH = Math.max(0, H - DRAW_SIZE - 2 * BOUNDARY_PADDING);
+
       objsRef.current = lowResCanvases.map((imgCanvas) => ({
         img: imgCanvas,
-        x: Math.random() * (W - DRAW_SIZE) + DRAW_SIZE / 2,
-        y: Math.random() * (H - DRAW_SIZE) + DRAW_SIZE / 2,
+        x: Math.random() * spawnAreaW + DRAW_SIZE / 2 + BOUNDARY_PADDING,
+        y: Math.random() * spawnAreaH + DRAW_SIZE / 2 + BOUNDARY_PADDING,
         vx: (Math.random() - 0.5) * 160,
         vy: (Math.random() - 0.5) * 40,
         angle: (Math.random() - 0.5) * Math.PI,
@@ -430,30 +441,30 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
           o.vy *= LINEAR_DAMPING;
           o.va *= ANGULAR_DAMPING;
 
-          // Boundaries + sleep (use viewport dims Wc/Hc)
+          // Boundaries + sleep (use viewport dims Wc/Hc and padding)
           const halfW = o.w / 2;
           const halfH = o.h / 2;
 
-          if (o.y + halfH > Hc) {
-            o.y = Hc - halfH;
+          if (o.y + halfH > Hc - BOUNDARY_PADDING) {
+            o.y = Hc - halfH - BOUNDARY_PADDING;
             if (o.vy > 0) o.vy = -o.vy * RESTITUTION;
             if (Math.abs(o.vy) < 20) { o.vx *= 0.85; } else { o.vx *= 0.985; }
             o.va *= 0.88;
           }
 
-          if (o.y - halfH < 0) {
-            o.y = halfH;
+          if (o.y - halfH < BOUNDARY_PADDING) {
+            o.y = halfH + BOUNDARY_PADDING;
             if (o.vy < 0) o.vy = -o.vy * RESTITUTION;
             o.va *= 0.95;
           }
 
-          if (o.x - halfW < 0) {
-            o.x = halfW;
+          if (o.x - halfW < BOUNDARY_PADDING) {
+            o.x = halfW + BOUNDARY_PADDING;
             if (o.vx < 0) o.vx = -o.vx * RESTITUTION;
             o.va *= 0.92;
           }
-          if (o.x + halfW > Wc) {
-            o.x = Wc - halfW;
+          if (o.x + halfW > Wc - BOUNDARY_PADDING) {
+            o.x = Wc - halfW - BOUNDARY_PADDING;
             if (o.vx > 0) o.vx = -o.vx * RESTITUTION;
             o.va *= 0.92;
           }
@@ -597,10 +608,14 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
             // reposition objects to random positions inside viewport (zero velocities)
             const W = vp.width;
             const H = vp.height;
+
+            const spawnAreaW = Math.max(0, W - DRAW_SIZE - 2 * BOUNDARY_PADDING);
+            const spawnAreaH = Math.max(0, H - DRAW_SIZE - 2 * BOUNDARY_PADDING);
+
             for (let o of objsRef.current) {
               if (!o) continue;
-              o.x = Math.random() * (W - DRAW_SIZE) + DRAW_SIZE / 2;
-              o.y = Math.random() * (H - DRAW_SIZE) + DRAW_SIZE / 2;
+              o.x = Math.random() * spawnAreaW + DRAW_SIZE / 2 + BOUNDARY_PADDING;
+              o.y = Math.random() * spawnAreaH + DRAW_SIZE / 2 + BOUNDARY_PADDING;
               o.vx = 0;
               o.vy = 0;
               o.angle = (Math.random() - 0.5) * Math.PI * 0.1;
@@ -647,10 +662,10 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
           o.w = DRAW_SIZE;
           o.h = DRAW_SIZE;
           o.r = DRAW_SIZE * 0.5;
-          // use getViewport() dims for clamping (consistent)
+          // use getViewport() dims for clamping (consistent) with padding
           const vp2 = getViewport();
-          o.x = Math.min(Math.max(o.x, o.w / 2), vp2.width - o.w / 2);
-          o.y = Math.min(Math.max(o.y, o.h / 2), vp2.height - o.h / 2);
+          o.x = Math.min(Math.max(o.x, o.w / 2 + BOUNDARY_PADDING), vp2.width - o.w / 2 - BOUNDARY_PADDING);
+          o.y = Math.min(Math.max(o.y, o.h / 2 + BOUNDARY_PADDING), vp2.height - o.h / 2 - BOUNDARY_PADDING);
         }
 
         runDuringIdle(async () => {
@@ -705,7 +720,6 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
         height: '100vh',
         display: 'block',
         touchAction: interactions ? 'none' : 'auto',
-        overflow: 'hidden',
         maxWidth: '100%',
         boxSizing: 'border-box',
       }}

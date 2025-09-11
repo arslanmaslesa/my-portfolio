@@ -29,7 +29,7 @@ const PROJECTS = [
 const itemHeight = 'h-[calc(100vw-108px)] md:h-[calc((100vw-64px)/2-44px)]';
 
 const ProjectSection = ({ projects = PROJECTS }) => (
-  <section className="px-3 2xl:px-6 pb-3 2xl:pb-6">
+  <section className="px-3 2xl:px-6 pb-30 2xl:pb-6">
     <div className="grid gap-3 2xl:gap-6 grid-cols-1 md:grid-cols-2">
       {projects.map((p) => (
         <div key={p.id} className={cn('w-full', itemHeight, p.featured && 'md:col-span-2')}>

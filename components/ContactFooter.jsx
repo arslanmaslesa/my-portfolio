@@ -9,12 +9,11 @@ const poppins = Poppins({
 
 export default function ContactFooter({
   socials = {
-    email: 'hello@example.com',
-    phone: '+1234567890',
+    email: 'arslanm.design@gmail.com',
     linkedin: 'https://www.linkedin.com/in/yourname',
     github: 'https://github.com/yourname',
     instagram: 'https://instagram.com/yourname',
-    cv: '/cv/Arslan_Maslesa_CV.pdf',
+    cv: '/Arslan_Maslesa_CV.pdf',
   },
   onPrimaryClick,
 }) {
@@ -24,16 +23,74 @@ export default function ContactFooter({
   const letterCount = letters.length;
 
   const [wrapWidth, setWrapWidth] = useState(0);
-  const wrapRef = useRef(null);
+  const [isVertical, setIsVertical] = useState(false);
+  const [isTouch, setIsTouch] = useState(false);
 
+  const wrapRef = useRef(null);
+  const linksRef = useRef(null);
+
+  const measureTimerRef = useRef(null);
+  const lastIsVerticalRef = useRef(isVertical);
+
+  // Detect touch devices
   useEffect(() => {
-    if (wrapRef.current) {
-      const resize = () => setWrapWidth(wrapRef.current.offsetWidth);
-      resize();
-      window.addEventListener("resize", resize);
-      return () => window.removeEventListener("resize", resize);
+    if (typeof window !== 'undefined') {
+      const touchSupported =
+        'ontouchstart' in window ||
+        navigator.maxTouchPoints > 0 ||
+        navigator.msMaxTouchPoints > 0;
+      setIsTouch(touchSupported);
     }
   }, []);
+
+  useEffect(() => {
+    if (!wrapRef.current || !linksRef.current) return;
+
+    const HYSTERESIS = 8; 
+    const DEBOUNCE = 80; 
+
+    const measure = () => {
+      window.requestAnimationFrame(() => {
+        if (!wrapRef.current || !linksRef.current) return;
+        const wrapW = Math.round(wrapRef.current.clientWidth);
+        const linksW = Math.round(linksRef.current.scrollWidth);
+
+        setWrapWidth(wrapW);
+
+        const wantsVertical = lastIsVerticalRef.current
+          ? linksW > wrapW - HYSTERESIS
+          : linksW > wrapW + HYSTERESIS;
+
+        if (wantsVertical !== lastIsVerticalRef.current) {
+          lastIsVerticalRef.current = wantsVertical;
+          setIsVertical(wantsVertical);
+        }
+      });
+    };
+
+    const scheduleMeasure = () => {
+      if (measureTimerRef.current) clearTimeout(measureTimerRef.current);
+      measureTimerRef.current = setTimeout(measure, DEBOUNCE);
+    };
+
+    measure();
+
+    const onResize = () => scheduleMeasure();
+    window.addEventListener('resize', onResize);
+
+    const ro = new ResizeObserver(() => scheduleMeasure());
+    ro.observe(wrapRef.current);
+    ro.observe(linksRef.current);
+
+    const fontFallbackTimer = setTimeout(() => scheduleMeasure(), 350);
+
+    return () => {
+      window.removeEventListener('resize', onResize);
+      ro.disconnect();
+      if (measureTimerRef.current) clearTimeout(measureTimerRef.current);
+      clearTimeout(fontFallbackTimer);
+    };
+  }, []); 
 
   const handlePrimary = () => {
     if (typeof onPrimaryClick === 'function') return onPrimaryClick();
@@ -41,19 +98,21 @@ export default function ContactFooter({
   };
 
   const links = [
-    { label: "Email", href: `mailto:${socials.email}` },
-    { label: "Phone", href: `tel:${socials.phone}` },
-    { label: "Instagram", href: socials.instagram },
-    { label: "LinkedIn", href: socials.linkedin },
-    { label: "GitHub", href: socials.github },
-    { label: "Download CV", href: socials.cv, download: true },
+    { label: 'arslanm.design@gmail.com', href: `mailto:${socials.email}` },
+    { label: 'Instagram', href: socials.instagram },
+    { label: 'LinkedIn', href: socials.linkedin },
+    { label: 'GitHub', href: socials.github },
+    { label: 'Download CV', href: socials.cv, download: true },
   ];
 
   return (
     <footer
-      className={`${poppins.className} relative z-[100] bg-black text-white w-full flex flex-col p-3 min-h-screen`}
+      className={`${poppins.className} relative z-[100] bg-white text-black w-full flex flex-col p-3 min-h-screen ${
+        isTouch ? 'touch' : ''
+      }`}
     >
       <div className="flex-1 flex flex-col items-center justify-center">
+        {/* Let's Talk segment */}
         <div
           className="letsWrap inline-flex flex-col items-center gap-8 select-none cursor-pointer"
           onClick={handlePrimary}
@@ -65,12 +124,12 @@ export default function ContactFooter({
             ref={wrapRef}
             className="headlineWrap relative inline-flex flex-col items-center"
           >
-            <div className="inline-flex items-baseline gap-6">
+            <div className="inline-flex items-baseline gap-3">
               <h1
-                className="letsText m-0 text-white"
+                className="letsText m-0 text-black"
                 style={{
-                  fontSize: 'clamp(3rem, 12vw, 16rem)',
-                  fontWeight: 200,
+                  fontSize: 'clamp(3rem, 11vw, 16rem)',
+                  fontWeight: 300,
                   lineHeight: 1,
                   letterSpacing: '-0.08em',
                   margin: 0,
@@ -89,45 +148,65 @@ export default function ContactFooter({
               </h1>
 
               <div className="bubbles inline-flex items-baseline pl-3 gap-3" aria-hidden>
-                <span className="bubble w-10 h-10 rounded-full bg-white" style={{ ['--i']: letterCount + 0 }} />
-                <span className="bubble w-10 h-10 rounded-full bg-white" style={{ ['--i']: letterCount + 1 }} />
-                <span className="bubble w-10 h-10 rounded-full bg-white" style={{ ['--i']: letterCount + 2 }} />
+                {[0, 1, 2].map((n) => (
+                  <span
+                    key={n}
+                    className="bubble w-12 h-12 rounded-full bg-[#eaeaea]"
+                    style={{ ['--i']: letterCount + n }}
+                  >
+                    <span className="svgWrap" aria-hidden>
+                      <svg viewBox="0 0 12 14" width="22" height="22" aria-hidden focusable="false">
+                        <path
+                          d="M3 2.5 L8.5 7 L3 11.5"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          fill="none"
+                        />
+                      </svg>
+                    </span>
+                  </span>
+                ))}
               </div>
             </div>
-
-            {/* Underline bar */}
-            <span className="underlineAnim absolute bottom-[-12px] left-0 h-1 bg-white rounded"></span>
           </div>
-
-          {/* Links row: distributed evenly across width */}
-          <nav
-            className="linksRow"
-            aria-label="contact links"
-            style={{ width: wrapWidth ? `${wrapWidth}px` : "auto" }}
-          >
-            <ul className="flex w-full justify-between text-md">
-              {links.map((link, i) => (
-                <li key={i} className="whitespace-nowrap">
-                  <a
-                    href={link.href}
-                    {...(link.download ? { download: true } : {})}
-                    target={link.href.startsWith("http") ? "_blank" : undefined}
-                    rel={link.href.startsWith("http") ? "noopener noreferrer" : undefined}
-                  >
-                    {link.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </nav>
         </div>
+
+        {/* Links row */}
+        <nav
+          className="linksRow mt-8"
+          aria-label="contact links"
+          style={{ width: wrapWidth ? `${wrapWidth}px` : 'auto' }}
+        >
+          <ul
+            ref={linksRef}
+            className={`w-full ${
+              isVertical
+                ? 'flex flex-col items-start gap-2 text-[20px]'
+                : 'flex justify-between text-base'
+            }`}
+          >
+            {links.map((link, i) => (
+              <li key={i} className={`${isVertical ? '' : 'whitespace-nowrap'}`}>
+                <a
+                  href={link.href}
+                  {...(link.download ? { download: true } : {})}
+                  target={link.href.startsWith('http') ? '_blank' : undefined}
+                  rel={link.href.startsWith('http') ? 'noopener noreferrer' : undefined}
+                  className="inline-block px-2 py-1"
+                >
+                  {link.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
       </div>
 
-      {/* Footer bottom text */}
-      <div className="flex-none px-6 text-sm flex items-center justify-center">
-        <div className="text-center">
-          © {year} Arslan Maslesa — Designed and built by me with ❤️
-        </div>
+      {/* Footer bottom */}
+      <div className="flex-none px-6 text-sm flex items-center justify-center mt-8">
+        <div className="text-center">© {year} Arslan Maslesa — Designed and built by me with ❤️</div>
       </div>
 
       <style jsx>{`
@@ -147,9 +226,41 @@ export default function ContactFooter({
 
         .bubble {
           display: inline-block;
+          vertical-align: baseline;
           transform-origin: center bottom;
           animation: loopRipple var(--cycle) cubic-bezier(0.35, 0, 0.25, 1) infinite;
           animation-delay: calc(var(--i) * var(--stagger));
+          position: relative;
+          overflow: visible;
+          transition: background-color 0.25s ease, color 0.25s ease;
+          color: #000;
+        }
+
+        .svgWrap {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          pointer-events: none;
+        }
+
+        .svgWrap svg {
+          display: block;
+          width: 22px;
+          height: 22px;
+        }
+
+        /* Hover for desktop */
+        .letsWrap:hover .bubble {
+          background-color: #000;
+          color: #fff;
+        }
+
+        /* Default hover state for touch devices */
+        .touch .letsWrap .bubble {
+          background-color: #000;
+          color: #fff;
         }
 
         @keyframes loopRipple {
@@ -161,18 +272,8 @@ export default function ContactFooter({
 
         .bubbles { transform: translateY(-0.06em); }
 
-        .headlineWrap .underlineAnim {
-          width: 0%;
-          transform-origin: right;
-          transition: width 0.4s ease, transform 0.4s ease;
-        }
-        .headlineWrap:hover .underlineAnim {
-          width: 100%;
-          transform-origin: left;
-        }
-
         .linksRow a {
-          color: #fff;
+          color: #000;
           text-decoration: none;
           display: inline-block;
           padding: 4px;
@@ -180,6 +281,8 @@ export default function ContactFooter({
         .linksRow a:hover {
           text-decoration: underline;
         }
+
+        .letsWrap:focus { outline: none; }
       `}</style>
     </footer>
   );
