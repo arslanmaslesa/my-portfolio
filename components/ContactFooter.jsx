@@ -256,11 +256,17 @@ export default function ContactFooter({
           background-color: #000;
           color: #fff;
         }
+        .linksRow a:hover {
+          text-decoration: underline;
+        }
 
         /* Default hover state for touch devices */
         .touch .letsWrap .bubble {
           background-color: #000;
           color: #fff;
+        }
+        .touch .linksRow a {
+          text-decoration: underline;
         }
 
         @keyframes loopRipple {
@@ -271,16 +277,6 @@ export default function ContactFooter({
         }
 
         .bubbles { transform: translateY(-0.06em); }
-
-        .linksRow a {
-          color: #000;
-          text-decoration: none;
-          display: inline-block;
-          padding: 4px;
-        }
-        .linksRow a:hover {
-          text-decoration: underline;
-        }
 
         .letsWrap:focus { outline: none; }
       `}</style>
