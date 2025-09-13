@@ -2,14 +2,16 @@
 import React, { useEffect, useState, useRef } from "react";
 
 export default function SkillRotator({
-  skills = ["Skill One", "Skill Two", "Skill Three"],
+  skills = ["UI & UX", "Illustration", "Branding", "3D", "Graphic Design"],
   switchInterval = 3000,
 }) {
   const skillImages = [
-    "https://picsum.photos/200/140?random=1",
-    "https://picsum.photos/200/140?random=2",
-    "https://picsum.photos/200/140?random=3",
-  ];
+  "/ui.png",
+  "/illustration.png",
+  "/branding.png",
+  "/3d.png",
+  "/graphic.png",
+];
 
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState("in");
@@ -19,22 +21,16 @@ export default function SkillRotator({
   const [cursorPos, setCursorPos] = useState({ x: -9999, y: -9999 });
   const lagPos = useRef({ x: -9999, y: -9999 });
 
-  // tiny state to force rerenders only when necessary
   const [, setTick] = useState(0);
 
   const fadeDuration = switchInterval * 0.25;
   const visibleDuration = switchInterval * 0.5;
-  const LAG_SPEED = 0.15; // smaller = slower lag
-
-  // how far back (pixels) the follower is initially placed relative to the pointer
-  // when the pointer first appears (prevents crawling from -9999 and avoids snap).
+  const LAG_SPEED = 0.15;
   const INIT_OFFSET = 40;
 
-  // refs that animation loop will read (avoid stale closures)
   const cursorPosRef = useRef(cursorPos);
   const hoveringRef = useRef(hovering);
 
-  // Load font (unchanged)
   useEffect(() => {
     const id = "poppins-font-link";
     if (!document.getElementById(id)) {
@@ -47,7 +43,6 @@ export default function SkillRotator({
     }
   }, []);
 
-  // Skill switch timer (unchanged)
   useEffect(() => {
     const t1 = setTimeout(() => setPhase("out"), visibleDuration);
     const t2 = setTimeout(() => {
@@ -61,7 +56,6 @@ export default function SkillRotator({
     };
   }, [index, skills.length, visibleDuration, fadeDuration]);
 
-  // Global pointer tracking (unchanged, but also update cursorPosRef)
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -77,27 +71,19 @@ export default function SkillRotator({
 
       setHovering(inside);
       setCursorPos({ x, y });
-      // keep ref up to date immediately
       cursorPosRef.current = { x, y };
 
-      // If lagPos is still the sentinel off-screen, initialize it near the pointer
-      // (small offset so it visually trails immediately, preventing a long crawl or snap).
       if (lagPos.current.x < -9000 && lagPos.current.y < -9000) {
         lagPos.current.x = x - INIT_OFFSET;
         lagPos.current.y = y - INIT_OFFSET;
-        // force one render so follower appears immediately near cursor
-        setTick(t => t + 1);
+        setTick((t) => t + 1);
       }
     };
 
     window.addEventListener("pointermove", onPointerMove);
-
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-    };
+    return () => window.removeEventListener("pointermove", onPointerMove);
   }, []);
 
-  // Scroll tracking to maintain hovering image (unchanged but update ref)
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -105,19 +91,19 @@ export default function SkillRotator({
     const onScroll = () => {
       const rect = container.getBoundingClientRect();
       const { x, y } = lastPointerRef.current;
+      const inside =
+        x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
 
-      const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
       setHovering(inside);
 
       if (inside) {
         setCursorPos({ x, y });
         cursorPosRef.current = { x, y };
 
-        // If follower hasn't been initialized yet (rare), initialize it here too
         if (lagPos.current.x < -9000 && lagPos.current.y < -9000) {
           lagPos.current.x = x - INIT_OFFSET;
           lagPos.current.y = y - INIT_OFFSET;
-          setTick(t => t + 1);
+          setTick((t) => t + 1);
         }
       }
     };
@@ -126,7 +112,6 @@ export default function SkillRotator({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // keep refs in sync when states change
   useEffect(() => {
     cursorPosRef.current = cursorPos;
   }, [cursorPos]);
@@ -135,33 +120,26 @@ export default function SkillRotator({
     hoveringRef.current = hovering;
   }, [hovering]);
 
-  // Single continuous animation loop that updates lagPos and only forces React updates when needed
   useEffect(() => {
     let animationFrame = 0;
-
     const animate = () => {
       const target = cursorPosRef.current;
-      // lerp
       lagPos.current.x += (target.x - lagPos.current.x) * LAG_SPEED;
       lagPos.current.y += (target.y - lagPos.current.y) * LAG_SPEED;
 
       const dx = Math.abs(target.x - lagPos.current.x);
       const dy = Math.abs(target.y - lagPos.current.y);
 
-      // Only trigger React re-render when:
-      // - pointer is hovering (we need to show motion), OR
-      // - lag hasn't settled (so it can finish the motion)
       if (hoveringRef.current || dx > 0.5 || dy > 0.5) {
-        setTick(t => t + 1);
+        setTick((t) => t + 1);
       }
 
       animationFrame = requestAnimationFrame(animate);
     };
 
     animationFrame = requestAnimationFrame(animate);
-
     return () => cancelAnimationFrame(animationFrame);
-  }, []); // run once
+  }, []);
 
   return (
     <section
@@ -180,14 +158,14 @@ export default function SkillRotator({
         </div>
       </div>
 
-      {/* Bottom indicators */}
+      {/* Indicators */}
       <div className="absolute left-0 right-0 bottom-3 translate-y-1/2 flex justify-center gap-3">
         {skills.map((_, i) => {
           const isActive = phase === "in" && i === index;
           return (
             <div
               key={i}
-              className="h-1 w-12 rounded-full transition-all ease-out"
+              className="h-3 w-3 rounded-full transition-all ease-out"
               style={{
                 backgroundColor: isActive ? "#000" : "#d1d5db",
                 transform: isActive ? "scale(1.05)" : "scale(1)",
@@ -199,10 +177,12 @@ export default function SkillRotator({
         })}
       </div>
 
-      {/* Hovering image with lag */}
+      {/* Hovering image with fade */}
       {hovering && (
         <div
-          className="fixed pointer-events-none z-50"
+          className={`fixed pointer-events-none z-50 image-wrapper ${
+            phase === "in" ? "img-in" : "img-out"
+          }`}
           style={{
             left: lagPos.current.x,
             top: lagPos.current.y,
@@ -212,9 +192,11 @@ export default function SkillRotator({
             borderRadius: 12,
             boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
             overflow: "hidden",
+            transition: `opacity ${fadeDuration}ms ease`,
           }}
         >
           <img
+            key={index} // ensures fade runs on every swap
             src={skillImages[index]}
             alt={skills[index]}
             className="w-full h-full object-cover"
@@ -222,7 +204,6 @@ export default function SkillRotator({
         </div>
       )}
 
-      {/* Styles */}
       <style>{`
         .skill-text {
           font-family: 'Poppins', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
@@ -236,6 +217,9 @@ export default function SkillRotator({
 
         .anim-in { opacity: 1; transform: translateY(0); }
         .anim-out { opacity: 0; transform: translateY(-16px); }
+
+        .img-in { opacity: 1; }
+        .img-out { opacity: 0; }
 
         @media (max-width: 520px) {
           .skill-text { font-size: 40px; }

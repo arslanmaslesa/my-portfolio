@@ -187,7 +187,7 @@ export default function ContactFooter({
 
         {/* Links row */}
         <nav
-          className="linksRow mt-8 w-full"
+          className="linksRow mt-3 w-full"
           aria-label="contact links"
           style={{ width: wrapWidth && bubbleCount !== 1 ? `${wrapWidth}px` : 'auto' }}
         >
