@@ -7,7 +7,7 @@ const DEFAULT_IMAGES = Array.from({ length: 36 }).map((_, i) => `/interest${(i %
 const MOBILE_BREAKPOINT = 768; // px
 const MOBILE_COUNT = 12; // use 12 images on mobile/smaller screens
 
-export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = true }) {
+export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = true, gravity = 1200 }) {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
@@ -46,7 +46,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
       return { DRAW_SIZE: 140, LOW_RES: 160, HIGH_RES: 280 };
     };
 
-    // physics constants (unchanged except GRAVITY is dynamic per-frame)
+    // physics constants (GRAVITY now controlled by `gravity` prop and applied on all devices)
     const CORNER_RADIUS = 8;
     const MOUSE_RADIUS = 300;
     const MOUSE_STRENGTH = 12000;
@@ -394,8 +394,8 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
         const Wc = vp.width; // CSS pixels
         const Hc = vp.height;
 
-        // dynamic gravity: 1200 on mobile or touch-capable devices, else 0
-        const GRAVITY = (isMobileRef.current || touchDeviceRef.current) ? 1200 : 0;
+        // GRAVITY applied uniformly on all devices — controlled via `gravity` prop.
+        const GRAVITY = gravity;
 
         for (let i = 0; i < objs.length; i++) {
           const o = objs[i];
@@ -708,7 +708,7 @@ export default function CanvasImagePile({ srcs = DEFAULT_IMAGES, interactions = 
       }
       teardown();
     };
-  }, [srcs, interactions]); // re-run only if srcs or interactions change
+  }, [srcs, interactions, gravity]); // re-run if srcs, interactions or gravity change
 
   // container styles: we use a wrapper to animate opacity when resetting
   return (

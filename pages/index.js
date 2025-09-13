@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import React, { useEffect, useState, useRef } from "react";
 import Navbar from "../components/Navbar";
@@ -9,6 +9,7 @@ import ProjectSection from "../components/ProjectSection";
 import SarajevoTagline from "../components/SarajevoTagline";
 import AboutSection from "../components/AboutSection";
 import ContactFooter from "../components/ContactFooter";
+import SkillsSection from "../components/SkillsSection";
 
 export default function Home() {
   const taglineText =
@@ -34,6 +35,9 @@ export default function Home() {
   const lenisRef = useRef(null);
   const sequenceStartedRef = useRef(false);
   const needScrollResetRef = useRef(true);
+
+  // NEW: store Lenis instance in state so children get the instance via props
+  const [lenisInstance, setLenisInstance] = useState(null);
 
   const [domReady, setDomReady] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
@@ -241,6 +245,7 @@ export default function Home() {
       });
 
       lenisRef.current = lenis;
+      setLenisInstance(lenis); // <-- make it visible to React children
 
       if (isLoaded && needScrollResetRef.current) {
         lenis.scrollTo(0, { immediate: true });
@@ -262,6 +267,7 @@ export default function Home() {
     return () => {
       lenisRef.current?.destroy?.();
       lenisRef.current = null;
+      setLenisInstance(null); // cleanup state
       if (rafId) cancelAnimationFrame(rafId);
     };
   }, [isLoaded]);
@@ -311,16 +317,18 @@ export default function Home() {
 
       <ProjectSection />
 
+      {/* Skills Section inserted directly after ProjectSection */}
+      {/* Pass lenisInstance so SkillsSection can subscribe to Lenis scroll events */}
+      <SkillsSection lenis={lenisInstance} />
+
       <AboutSection
-  aboutTexts={aboutTexts}
-  aboutRefs={aboutRefs}
-  aboutOffsets={aboutOffsets}
-  ui={ui}
-/>
+        aboutTexts={aboutTexts}
+        aboutRefs={aboutRefs}
+        aboutOffsets={aboutOffsets}
+        ui={ui}
+      />
 
-
-<ContactFooter />
-
+      <ContactFooter />
     </main>
   );
 }
