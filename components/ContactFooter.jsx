@@ -114,7 +114,7 @@ export default function ContactFooter({
 
   return (
     <footer
-      className={`${poppins.className} relative z-[100] bg-white text-black w-full flex flex-col p-3 min-h-screen ${
+      className={`${poppins.className} relative z-[30] bg-white text-black w-full flex flex-col p-3 min-h-screen ${
         isTouch ? 'touch' : ''
       }`}
     >
