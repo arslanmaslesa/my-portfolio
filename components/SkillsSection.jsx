@@ -19,23 +19,35 @@ export default function SkillRotator({
   const [cursorPos, setCursorPos] = useState({ x: -9999, y: -9999 });
   const lagPos = useRef({ x: -9999, y: -9999 });
 
+  // tiny state to force rerenders only when necessary
+  const [, setTick] = useState(0);
+
   const fadeDuration = switchInterval * 0.25;
   const visibleDuration = switchInterval * 0.5;
-  const LAG_SPEED = 0.08;
+  const LAG_SPEED = 0.15; // smaller = slower lag
 
-  // Load font
+  // how far back (pixels) the follower is initially placed relative to the pointer
+  // when the pointer first appears (prevents crawling from -9999 and avoids snap).
+  const INIT_OFFSET = 40;
+
+  // refs that animation loop will read (avoid stale closures)
+  const cursorPosRef = useRef(cursorPos);
+  const hoveringRef = useRef(hovering);
+
+  // Load font (unchanged)
   useEffect(() => {
     const id = "poppins-font-link";
     if (!document.getElementById(id)) {
       const link = document.createElement("link");
       link.id = id;
       link.rel = "stylesheet";
-      link.href = "https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap";
+      link.href =
+        "https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap";
       document.head.appendChild(link);
     }
   }, []);
 
-  // Skill switch timer
+  // Skill switch timer (unchanged)
   useEffect(() => {
     const t1 = setTimeout(() => setPhase("out"), visibleDuration);
     const t2 = setTimeout(() => {
@@ -49,7 +61,7 @@ export default function SkillRotator({
     };
   }, [index, skills.length, visibleDuration, fadeDuration]);
 
-  // Pointer tracking
+  // Global pointer tracking (unchanged, but also update cursorPosRef)
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -60,75 +72,96 @@ export default function SkillRotator({
       lastPointerRef.current = { x, y };
 
       const rect = container.getBoundingClientRect();
-      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-        setHovering(true);
-        setCursorPos({ x, y });
+      const inside =
+        x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+
+      setHovering(inside);
+      setCursorPos({ x, y });
+      // keep ref up to date immediately
+      cursorPosRef.current = { x, y };
+
+      // If lagPos is still the sentinel off-screen, initialize it near the pointer
+      // (small offset so it visually trails immediately, preventing a long crawl or snap).
+      if (lagPos.current.x < -9000 && lagPos.current.y < -9000) {
+        lagPos.current.x = x - INIT_OFFSET;
+        lagPos.current.y = y - INIT_OFFSET;
+        // force one render so follower appears immediately near cursor
+        setTick(t => t + 1);
       }
     };
 
-    const onMouseEnter = () => {
-      const { x, y } = lastPointerRef.current;
-      setHovering(true);
-      setCursorPos({ x, y });
-    };
-
-    const onMouseLeave = () => {
-      setHovering(false);
-      setCursorPos({ x: -9999, y: -9999 });
-    };
-
-    container.addEventListener("pointermove", onPointerMove);
-    container.addEventListener("mouseenter", onMouseEnter);
-    container.addEventListener("mouseleave", onMouseLeave);
+    window.addEventListener("pointermove", onPointerMove);
 
     return () => {
-      container.removeEventListener("pointermove", onPointerMove);
-      container.removeEventListener("mouseenter", onMouseEnter);
-      container.removeEventListener("mouseleave", onMouseLeave);
+      window.removeEventListener("pointermove", onPointerMove);
     };
   }, []);
 
-  // Scroll tracking
+  // Scroll tracking to maintain hovering image (unchanged but update ref)
   useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
     const onScroll = () => {
-      const container = containerRef.current;
-      if (!container) return;
       const rect = container.getBoundingClientRect();
       const { x, y } = lastPointerRef.current;
-      const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
 
+      const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
       setHovering(inside);
-      if (inside) setCursorPos({ x, y });
-      else setCursorPos({ x: -9999, y: -9999 });
+
+      if (inside) {
+        setCursorPos({ x, y });
+        cursorPosRef.current = { x, y };
+
+        // If follower hasn't been initialized yet (rare), initialize it here too
+        if (lagPos.current.x < -9000 && lagPos.current.y < -9000) {
+          lagPos.current.x = x - INIT_OFFSET;
+          lagPos.current.y = y - INIT_OFFSET;
+          setTick(t => t + 1);
+        }
+      }
     };
 
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Shoot positions even if mouse stops
+  // keep refs in sync when states change
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (hovering) {
-        const { x, y } = lastPointerRef.current;
-        setCursorPos({ x, y });
-      }
-    }, 16); // ~60fps
+    cursorPosRef.current = cursorPos;
+  }, [cursorPos]);
 
-    return () => clearInterval(interval);
+  useEffect(() => {
+    hoveringRef.current = hovering;
   }, [hovering]);
 
-  // Smooth lag animation
+  // Single continuous animation loop that updates lagPos and only forces React updates when needed
   useEffect(() => {
-    let animationFrame;
+    let animationFrame = 0;
+
     const animate = () => {
-      lagPos.current.x += (cursorPos.x - lagPos.current.x) * LAG_SPEED;
-      lagPos.current.y += (cursorPos.y - lagPos.current.y) * LAG_SPEED;
+      const target = cursorPosRef.current;
+      // lerp
+      lagPos.current.x += (target.x - lagPos.current.x) * LAG_SPEED;
+      lagPos.current.y += (target.y - lagPos.current.y) * LAG_SPEED;
+
+      const dx = Math.abs(target.x - lagPos.current.x);
+      const dy = Math.abs(target.y - lagPos.current.y);
+
+      // Only trigger React re-render when:
+      // - pointer is hovering (we need to show motion), OR
+      // - lag hasn't settled (so it can finish the motion)
+      if (hoveringRef.current || dx > 0.5 || dy > 0.5) {
+        setTick(t => t + 1);
+      }
+
       animationFrame = requestAnimationFrame(animate);
     };
-    animate();
+
+    animationFrame = requestAnimationFrame(animate);
+
     return () => cancelAnimationFrame(animationFrame);
-  }, [cursorPos]);
+  }, []); // run once
 
   return (
     <section
@@ -166,20 +199,19 @@ export default function SkillRotator({
         })}
       </div>
 
-      {/* Hovering image */}
+      {/* Hovering image with lag */}
       {hovering && (
         <div
           className="fixed pointer-events-none z-50"
           style={{
             left: lagPos.current.x,
             top: lagPos.current.y,
-            width: 200,
-            height: 140,
+            width: 320,
+            height: 240,
             transform: "translate(-50%, -50%)",
             borderRadius: 12,
-            boxShadow: "0 6px 18px rgba(0,0,0,0.18)",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
             overflow: "hidden",
-            transition: "box-shadow 0.2s ease",
           }}
         >
           <img
