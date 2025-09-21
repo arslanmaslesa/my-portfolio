@@ -17,12 +17,15 @@ export default function AboutSection({ aboutTexts, aboutRefs, aboutOffsets, ui }
   const EDGE_PADDING = CURSOR_SIZE / 2;
   const lastPointerRef = useRef({ x: -9999, y: -9999 });
 
-  // follower + refs for rAF
-  const lagPos = useRef({ x: -9999, y: -9999 });
+  // follower physics
+  const lagPos = useRef({ x: -9999, y: -9999 }); // circle
+  const lagPosBubble = useRef({ x: -9999, y: -9999 }); // bubble
+
   const clampedPosRef = useRef(clampedPos);
   const hoveringRef = useRef(hovering);
 
-  const LAG_SPEED = 0.15;
+  const LAG_SPEED = 0.15; // circle speed
+  const BUBBLE_SPEED = 0.1; // bubble slower = wobble
   const INIT_OFFSET = 40;
   const RENDER_THRESHOLD = 0.5;
 
@@ -49,16 +52,21 @@ export default function AboutSection({ aboutTexts, aboutRefs, aboutOffsets, ui }
       const container = containerRef.current;
       if (!container) return;
       const rect = container.getBoundingClientRect();
-      const inside = rawX >= rect.left && rawX <= rect.right && rawY >= rect.top && rawY <= rect.bottom;
+      const inside =
+        rawX >= rect.left &&
+        rawX <= rect.right &&
+        rawY >= rect.top &&
+        rawY <= rect.bottom;
 
       const clampedX = clamp(rawX, EDGE_PADDING, window.innerWidth - EDGE_PADDING);
       const clampedY = clamp(rawY, EDGE_PADDING, window.innerHeight - EDGE_PADDING);
 
-      // Initialize lagPos if it's still offscreen
       if (lagPos.current.x < -9000 && lagPos.current.y < -9000) {
         lagPos.current.x = clampedX - INIT_OFFSET;
         lagPos.current.y = clampedY - INIT_OFFSET;
-        setTick(t => t + 1);
+        lagPosBubble.current.x = clampedX + 55; // bubble start
+        lagPosBubble.current.y = clampedY - 55;
+        setTick((t) => t + 1);
       }
 
       if (inside) {
@@ -78,7 +86,7 @@ export default function AboutSection({ aboutTexts, aboutRefs, aboutOffsets, ui }
     return () => window.removeEventListener('pointermove', onPointerMove);
   }, [isTouchDevice]);
 
-  // 🔥 Scroll tracking — fixes appear/disappear without mouse move
+  // Scroll tracking
   useEffect(() => {
     if (isTouchDevice) return;
     const container = containerRef.current;
@@ -104,7 +112,9 @@ export default function AboutSection({ aboutTexts, aboutRefs, aboutOffsets, ui }
         if (lagPos.current.x < -9000 && lagPos.current.y < -9000) {
           lagPos.current.x = clampedX - INIT_OFFSET;
           lagPos.current.y = clampedY - INIT_OFFSET;
-          setTick(t => t + 1);
+          lagPosBubble.current.x = clampedX + 55;
+          lagPosBubble.current.y = clampedY - 55;
+          setTick((t) => t + 1);
         }
       } else if (hoveringRef.current) {
         setHovering(false);
@@ -112,8 +122,8 @@ export default function AboutSection({ aboutTexts, aboutRefs, aboutOffsets, ui }
       }
     };
 
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, [isTouchDevice]);
 
   // Sync refs
@@ -130,14 +140,21 @@ export default function AboutSection({ aboutTexts, aboutRefs, aboutOffsets, ui }
     let raf = 0;
     const animate = () => {
       const target = clampedPosRef.current;
+
+      // circle follows fast
       lagPos.current.x += (target.x - lagPos.current.x) * LAG_SPEED;
       lagPos.current.y += (target.y - lagPos.current.y) * LAG_SPEED;
+
+      // bubble follows slower, offset top-right but pushed slightly down+left
+      const bubbleTarget = { x: target.x + 60, y: target.y - 60 };
+      lagPosBubble.current.x += (bubbleTarget.x - lagPosBubble.current.x) * BUBBLE_SPEED;
+      lagPosBubble.current.y += (bubbleTarget.y - lagPosBubble.current.y) * BUBBLE_SPEED;
 
       const dx = Math.abs(target.x - lagPos.current.x);
       const dy = Math.abs(target.y - lagPos.current.y);
 
       if (hoveringRef.current || dx > RENDER_THRESHOLD || dy > RENDER_THRESHOLD) {
-        setTick(t => t + 1);
+        setTick((t) => t + 1);
       }
 
       raf = requestAnimationFrame(animate);
@@ -148,7 +165,7 @@ export default function AboutSection({ aboutTexts, aboutRefs, aboutOffsets, ui }
   }, []);
 
   return (
-    <div ref={containerRef} className="relative cursor-auto">
+    <div ref={containerRef} className="relative cursor-auto font-[Poppins]">
       <div style={{ height: `${aboutTexts.length * 200}vh`, position: 'relative' }}>
         <div className="sticky top-0 w-full h-screen z-30 pointer-events-none">
           <CanvasImagePile mousePos={clampedPos} interactions={!isTouchDevice} />
@@ -172,27 +189,48 @@ export default function AboutSection({ aboutTexts, aboutRefs, aboutOffsets, ui }
       </div>
 
       {!isTouchDevice && hovering && (
-        <div
-          ref={cursorRef}
-          className="fixed pointer-events-none z-50"
-          style={{
-            left: lagPos.current.x,
-            top: lagPos.current.y,
-            width: CURSOR_SIZE,
-            height: CURSOR_SIZE,
-            transform: 'translate(-50%, -50%)',
-            borderRadius: '50%',
-            overflow: 'hidden',
-            boxShadow: '0 8px 30px rgba(0,0,0,0.18)',
-            willChange: 'transform,left,top',
-          }}
-        >
-          <img
-            src="/me.png"
-            alt="cursor"
-            className="w-full h-full object-cover"
-          />
-        </div>
+        <>
+          {/* Circle cursor */}
+          <div
+            ref={cursorRef}
+            className="fixed pointer-events-none z-50"
+            style={{
+              left: lagPos.current.x,
+              top: lagPos.current.y,
+              width: CURSOR_SIZE,
+              height: CURSOR_SIZE,
+              transform: 'translate(-50%, -50%)',
+              borderRadius: '50%',
+              overflow: 'hidden',
+              boxShadow: '0 8px 30px rgba(0,0,0,0.18)',
+              willChange: 'transform,left,top',
+            }}
+          >
+            <img
+              src="/me.png"
+              alt="cursor"
+              className="w-full h-full object-cover"
+            />
+          </div>
+
+          {/* Speech bubble */}
+          <div
+            className="fixed pointer-events-none z-50 px-4 py-2 bg-white font-medium text-black text-[16px] rounded-full shadow-lg"
+            style={{
+              left: lagPosBubble.current.x,
+              top: lagPosBubble.current.y,
+              transform: 'translate(-50%, -50%)',
+              whiteSpace: 'nowrap',
+              fontFamily: 'Poppins, sans-serif',
+            }}
+          >
+            Hi, I’m Arslan
+            {/* Tail pointing bottom-left */}
+            <span
+              className="absolute bottom-[-6px] left-3 w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-t-8 border-t-white"
+            />
+          </div>
+        </>
       )}
     </div>
   );

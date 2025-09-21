@@ -1,4 +1,5 @@
-"use client";
+// pages/index.jsx  (or your Home component file — full updated file)
+'use client';
 
 import React, { useEffect, useState, useRef } from "react";
 import Navbar from "../components/Navbar";
@@ -10,13 +11,14 @@ import SarajevoTagline from "../components/SarajevoTagline";
 import AboutSection from "../components/AboutSection";
 import ContactFooter from "../components/ContactFooter";
 import SkillsSection from "../components/SkillsSection";
+import CaseStudyProvider from "../components/CaseStudyProvider"; // <-- updated provider
 
 export default function Home() {
   const taglineText =
     "Product designer based in Sarajevo, turning complex ideas into simple, intuitive, and lasting experiences.";
 
   const aboutTexts = [
-    `Hi, I’m Arslan. I love immersing myself in architecture, film, music and culture, all of which inspire how I approach design.`,
+    `I love immersing myself in architecture, film, music and culture, all of which inspire how I approach design.`,
     `I enjoy the energy of working with others, bouncing ideas around, shaping them together, and refining until the details feel just right.`,
   ];
 
@@ -245,7 +247,7 @@ export default function Home() {
       });
 
       lenisRef.current = lenis;
-      setLenisInstance(lenis); // <-- make it visible to React children
+      setLenisInstance(lenis); // make it visible to React children
 
       if (isLoaded && needScrollResetRef.current) {
         lenis.scrollTo(0, { immediate: true });
@@ -273,62 +275,64 @@ export default function Home() {
   }, [isLoaded]);
 
   return (
-    <main className="bg-white min-h-[300vh] relative">
-      <Loader progress={progress} done={isLoaded} />
+    <CaseStudyProvider lenis={lenisInstance}>
+      <main className="bg-white min-h-[300vh] relative">
+        <Loader progress={progress} done={isLoaded} />
 
-      <div className="fixed top-0 left-0 w-full z-[9999]">
-        <Navbar />
-      </div>
-
-      <HeroVideo
-        scale={ui.scale}
-        introPlaying={intro.playing}
-        introDone={intro.done}
-        clipScale={clipScale}
-        setClipScale={setClipScale}
-        onVideoReady={() => setVideoReady(true)}
-      />
-
-      <Tagline
-        phase={taglinePhase}
-        scrollY={ui.scrollY}
-        videoHeight={vhRef.current}
-        clipScale={clipScale}
-      />
-
-      {/* Intro Sarajevo tagline */}
-      <div className="relative z-0 bg-white" style={{ height: "300vh" }}>
-        <div
-          className="sticky top-0 w-screen h-screen flex items-center justify-center"
-          style={{
-            opacity: intro.done ? 1 : 0,
-            transition: "opacity 0.45s ease",
-            zIndex: 5,
-          }}
-        >
-          <SarajevoTagline
-            text={taglineText}
-            scrollY={ui.scrollY}
-            refObj={taglineRef}
-            triggerOffset={vhRef.current}
-          />
+        <div className="fixed top-0 left-0 w-full z-[9999]">
+          <Navbar />
         </div>
-      </div>
 
-      <ProjectSection />
+        <HeroVideo
+          scale={ui.scale}
+          introPlaying={intro.playing}
+          introDone={intro.done}
+          clipScale={clipScale}
+          setClipScale={setClipScale}
+          onVideoReady={() => setVideoReady(true)}
+        />
 
-      {/* Skills Section inserted directly after ProjectSection */}
-      {/* Pass lenisInstance so SkillsSection can subscribe to Lenis scroll events */}
-      <SkillsSection lenis={lenisInstance} />
+        <Tagline
+          phase={taglinePhase}
+          scrollY={ui.scrollY}
+          videoHeight={vhRef.current}
+          clipScale={clipScale}
+        />
 
-      <AboutSection
-        aboutTexts={aboutTexts}
-        aboutRefs={aboutRefs}
-        aboutOffsets={aboutOffsets}
-        ui={ui}
-      />
+        {/* Intro Sarajevo tagline */}
+        <div className="relative z-0 bg-white" style={{ height: "300vh" }}>
+          <div
+            className="sticky top-0 w-screen h-screen flex items-center justify-center"
+            style={{
+              opacity: intro.done ? 1 : 0,
+              transition: "opacity 0.45s ease",
+              zIndex: 5,
+            }}
+          >
+            <SarajevoTagline
+              text={taglineText}
+              scrollY={ui.scrollY}
+              refObj={taglineRef}
+              triggerOffset={vhRef.current}
+            />
+          </div>
+        </div>
 
-      <ContactFooter />
-    </main>
+        <ProjectSection />
+
+        {/* Skills Section inserted directly after ProjectSection */}
+        {/* Pass lenisInstance so SkillsSection can subscribe to Lenis scroll events */}
+        <SkillsSection lenis={lenisInstance} />
+
+        <AboutSection
+          aboutTexts={aboutTexts}
+          aboutRefs={aboutRefs}
+          aboutOffsets={aboutOffsets}
+          ui={ui}
+        />
+
+        <ContactFooter />
+      </main>
+    </CaseStudyProvider>
   );
 }

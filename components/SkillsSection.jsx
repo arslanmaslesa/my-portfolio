@@ -1,4 +1,6 @@
+// components/SkillRotator.jsx
 'use client';
+
 import React, { useEffect, useState, useRef } from "react";
 
 export default function SkillRotator({
@@ -6,12 +8,12 @@ export default function SkillRotator({
   switchInterval = 3000,
 }) {
   const skillImages = [
-  "/ui.png",
-  "/illustration.png",
-  "/branding.png",
-  "/3d.png",
-  "/graphic.png",
-];
+    "/ui.png",
+    "/illustration.png",
+    "/branding.png",
+    "/3d.png",
+    "/graphic.png",
+  ];
 
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState("in");
@@ -30,6 +32,20 @@ export default function SkillRotator({
 
   const cursorPosRef = useRef(cursorPos);
   const hoveringRef = useRef(hovering);
+
+  // helper to test overlay open / synthetic redirect guards
+  const isOverlayOpen = () => typeof window !== "undefined" && !!window.__CASE_STUDY_OPEN;
+  const isRedispatching = () => typeof window !== "undefined" && !!window.__CS_REDIRECTING;
+
+  const clearHoverState = () => {
+    // reset visible hover state and positions
+    setHovering(false);
+    hoveringRef.current = false;
+    setCursorPos({ x: -9999, y: -9999 });
+    cursorPosRef.current = { x: -9999, y: -9999 };
+    lagPos.current = { x: -9999, y: -9999 };
+    setTick((t) => t + 1); // force a frame update where needed
+  };
 
   useEffect(() => {
     const id = "poppins-font-link";
@@ -56,11 +72,37 @@ export default function SkillRotator({
     };
   }, [index, skills.length, visibleDuration, fadeDuration]);
 
+  // If overlay class toggles, clear hover state — robust even if overlay was opened without pointer movement.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const body = document.body;
+    const mo = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        if (m.attributeName === "class") {
+          const open = body.classList.contains("case-study-open");
+          if (open) clearHoverState();
+        }
+      }
+    });
+    mo.observe(body, { attributes: true, attributeFilter: ["class"] });
+    // also clear on mount if overlay already open
+    if (isOverlayOpen()) clearHoverState();
+    return () => mo.disconnect();
+  }, []);
+
+  // pointermove — global (but guarded). We guard against overlay being open and against synthetic redispatching.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     const onPointerMove = (e) => {
+      // ignore while overlay is open or when we are redispatching synthetic events
+      if (isOverlayOpen() || isRedispatching()) {
+        // make sure hover visuals are cleared if overlay opened while hovering
+        if (hoveringRef.current) clearHoverState();
+        return;
+      }
+
       const x = e.clientX;
       const y = e.clientY;
       lastPointerRef.current = { x, y };
@@ -70,10 +112,12 @@ export default function SkillRotator({
         x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
 
       setHovering(inside);
+      hoveringRef.current = inside;
+
       setCursorPos({ x, y });
       cursorPosRef.current = { x, y };
 
-      if (lagPos.current.x < -9000 && lagPos.current.y < -9000) {
+      if (inside && lagPos.current.x < -9000 && lagPos.current.y < -9000) {
         lagPos.current.x = x - INIT_OFFSET;
         lagPos.current.y = y - INIT_OFFSET;
         setTick((t) => t + 1);
@@ -84,17 +128,24 @@ export default function SkillRotator({
     return () => window.removeEventListener("pointermove", onPointerMove);
   }, []);
 
+  // scrolling: keep behavior but guard overlay
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     const onScroll = () => {
+      if (isOverlayOpen() || isRedispatching()) {
+        if (hoveringRef.current) clearHoverState();
+        return;
+      }
+
       const rect = container.getBoundingClientRect();
       const { x, y } = lastPointerRef.current;
       const inside =
         x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
 
       setHovering(inside);
+      hoveringRef.current = inside;
 
       if (inside) {
         setCursorPos({ x, y });
@@ -120,9 +171,18 @@ export default function SkillRotator({
     hoveringRef.current = hovering;
   }, [hovering]);
 
+  // animation loop for lagging image
   useEffect(() => {
     let animationFrame = 0;
     const animate = () => {
+      // if overlay open, ensure we don't animate/have visuals
+      if (isOverlayOpen()) {
+        // ensure state cleared and skip frames
+        if (hoveringRef.current) clearHoverState();
+        animationFrame = requestAnimationFrame(animate);
+        return;
+      }
+
       const target = cursorPosRef.current;
       lagPos.current.x += (target.x - lagPos.current.x) * LAG_SPEED;
       lagPos.current.y += (target.y - lagPos.current.y) * LAG_SPEED;
@@ -130,6 +190,7 @@ export default function SkillRotator({
       const dx = Math.abs(target.x - lagPos.current.x);
       const dy = Math.abs(target.y - lagPos.current.y);
 
+      // trigger re-render when relevant
       if (hoveringRef.current || dx > 0.5 || dy > 0.5) {
         setTick((t) => t + 1);
       }
@@ -178,7 +239,7 @@ export default function SkillRotator({
       </div>
 
       {/* Hovering image with fade */}
-      {hovering && (
+      {hovering && !isOverlayOpen() && (
         <div
           className={`fixed pointer-events-none z-50 image-wrapper ${
             phase === "in" ? "img-in" : "img-out"

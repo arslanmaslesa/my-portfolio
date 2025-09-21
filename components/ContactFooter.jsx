@@ -163,7 +163,7 @@ export default function ContactFooter({
                 {Array.from({ length: bubbleCount }).map((_, n) => (
                   <span
                     key={n}
-                    className="bubble w-12 h-12 rounded-full bg-[#eaeaea]"
+                    className="bubble w-12 h-12 rounded-full bg-gray-100"
                     style={{ ['--i']: letterCount + n }}
                   >
                     <span className="svgWrap" aria-hidden>

@@ -1,0 +1,101 @@
+// data/projects.js
+export const PROJECTS = [
+  {
+    id: 1,
+    image: '/proj1.png',
+    title: 'Appo Website',
+    skills: ['Figma', 'UI/UX', 'Next.js'],
+    summary: 'A marketing website for Appo — fast, accessible, conversion-focused.',
+    problem: 'Low conversion and confusing information architecture.',
+    solution: 'Reworked IA, clearer CTAs, and polished visual system.',
+    role: 'Product Designer',
+    timeline: '3 months',
+    tools: ['Figma', 'Illustrator', 'Next.js'],
+    process: [
+      { title: 'Research', description: 'Stakeholder interviews, analytics review, user testing.' },
+      { title: 'Design', description: 'Wireframes, hi-fi mockups, interactive prototype.' },
+    ],
+    gallery: ['/proj1-1.png', '/proj1-2.png'],
+    outcome: 'Signups +32% in A/B test.',
+    metrics: [{ label: 'Conversion increase', value: '32%' }],
+    links: [{ label: 'Live site', url: 'https://example.com' }],
+  },
+  {
+    id: 2,
+    image: '/proj2.png',
+    title: 'Appo Mobile',
+    skills: ['Figma', 'Flutter', 'Prototyping'],
+    summary: 'Mobile app prototype to validate onboarding flow.',
+    role: 'UX Designer',
+    timeline: '6 weeks',
+    tools: ['Figma', 'Flutter'],
+    gallery: ['/proj2-1.png'],
+  },
+  {
+    id: 3,
+    image: '/proj3.png',
+    title: 'Appo Product Demo',
+    featured: true,
+    video: '/appoproductdemo.mp4',
+    subtitles: '/appoproductdemo.vtt',
+    showSoundButton: true,
+    skills: ['Figma', 'Motion', 'Prototype', 'Video'],
+    summary: 'A demo video highlighting the core product experience.',
+    outcome: 'Better buy-in from stakeholders and clearer product story.',
+    metrics: [{ label: 'Demo plays', value: '4.2k' }],
+    gallery: ['/proj3-1.png', '/proj3-2.png'],
+  },
+  {
+    id: 4,
+    image: '/proj4.png',
+    title: 'Book Covers',
+    video: '/books.mp4',
+    showSoundButton: false,
+    skills: ['Illustration', 'Cover Design', 'Amazon Kindle'],
+    summary: 'A small collection of book cover designs and mockups.',
+    gallery: ['/proj4-1.png'],
+  },
+  {
+    id: 5,
+    image: '/proj5.png',
+    title: 'Hotel Kapetanovina',
+    skills: ['Branding', 'Print', 'Illustrator'],
+    summary: 'For Hotel Kapetanovina, I designed a visit card that conveys freshness and comfort in the city’s hot climate. With a clean layout, light tones, and refined branding, it serves as both a functional tool and a subtle extension of the hotel’s welcoming identity.',
+    image2: '/kapetanovina/kapetanovina.png',
+    role: 'Product Designer',
+    timeline: '2 weeks',
+    client: 'Hotel Kapetanovina',
+    deliverables: 'Visit card design, branding assets',
+    tools: ['Figma', 'Illustrator'],
+    info: [
+      { title: 'Role', info: 'Product Designer' },
+      { title: 'Duration', info: '2 weeks' },
+      { title: 'Client', info: 'Hotel Kapetanovina' },
+      { title: 'Deliverables', info: 'Visit card design, branding assets' },
+      { title: 'Tools', info: 'Figma, Illustrator' },
+    ],
+
+    // Story-driven case study copy
+    challenge: `Hotel Kapetanovina, located in Mostar, wanted branding that felt distinct and aligned with the experience they offer. Their existing materials felt generic and didn’t capture the hotel’s welcoming atmosphere. The challenge was to design a business card that was not only functional but also conveyed the hotel’s character and left a lasting impression on guests and partners.`,
+
+    research: 'In conversations with the client and through competitor research, it became clear that most hotels relied on formal, predictable designs. Guests valued clarity, personality, and memorability. Given Mostar’s hot climate, the design also needed to feel light and refreshing. Aloe vera, a plant associated with comfort and renewal, emerged as a natural motif that could communicate these qualities subtly and elegantly.',
+    
+
+    solution: `I anchored the design in the hotel’s teal brand color, giving the card a distinctive, calming presence. Hand-drawn aloe vera illustrations introduced an organic, refreshing touch. The logo was refined for clear recognition, and the layout and typography were kept simple and legible. The final card balanced professionalism with an approachable, inviting tone, reflecting the hotel’s trustworthy and welcoming character.`,
+
+    impact: `The redesigned card became more than a contact tool — it became a memorable touchpoint for the brand. Staff shared it confidently, and guests described it as "elegant" and "refreshing." Partners also responded positively, often sparking conversations around the design. Beyond this single asset, the approach established a flexible visual language that could extend to future branding, giving the hotel a consistent identity to build on.`,
+
+    outcome: 'Positive brand feedback from guests and partners; established reusable design language for future collateral.',
+
+    gallery: [
+        '/kapetanovina/spavaca.png',
+        '/kapetanovina/most.png',
+        '/kapetanovina/hotel.png',
+        '/kapetanovina/aloa.png',
+        '/kapetanovina/cards_dual.png',
+        '/kapetanovina/tower.png',
+        '/kapetanovina/palm_card.png',
+        '/kapetanovina/plate_cards.png',
+    ],
+  },
+];
