@@ -4,11 +4,14 @@ import React, { createContext, useContext, useEffect, useRef, useState } from "r
 import { createPortal } from "react-dom";
 
 /*
-  CASE STUDY PROVIDER — Tailwind-first version (mobile fix)
-  - Removed custom touchmove handlers that were interfering with native scrolling on some mobile browsers
-  - Rely on native scrolling with `-webkit-overflow-scrolling: touch` and `overscroll-behavior: contain` to prevent body rubber-band
-  - Keep desktop wheel handler so trackpad/mouse wheel scroll works
-  - If mobile still misbehaves, switching to make the panel itself the scroll container is the next straightforward step
+  CASE STUDY PROVIDER — Tailwind-first version (updated)
+  - Layout now alternates: DOUBLE IMAGES and PAIR (image+text) rows, starting with DOUBLE
+  - In paired rows the text column takes up 1/3 and the image 2/3 on md+ screens
+  - Paired text blocks still alternate orientation (first pair shows TEXT on LEFT)
+  - Paired text segments have px-3
+  - Grid gaps use gap-3
+  - Fix: double rows now follow the same flipping pattern as pairs (big image alternates left/right)
+  - Gallery images are forced to a uniform height (mobile and md+) — hero image is intentionally left unchanged
 */
 
 const CaseStudyContext = createContext(null);
@@ -52,11 +55,11 @@ export const CaseStudyProvider = ({ children, lenis = null }) => {
 
 export default CaseStudyProvider;
 
-/* ---------------- CaseStudyOverlay (cleaner mobile behavior) ---------------- */
+/* ---------------- CaseStudyOverlay (no focus stuff) ---------------- */
 const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
   const portalRef = useRef(null);
-  const overlayRef = useRef(null); // scroll container + backdrop
-  const panelRef = useRef(null);
+  const overlayRef = useRef(null); // overlay scroll container
+  const panelRef = useRef(null);   // the card/panel inside overlay
   const lenisPaused = useRef(false);
 
   // create portal root synchronously (client-only)
@@ -113,23 +116,121 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
     onClose();
   };
 
-  // -------- desktop wheel / trackpad handling so wheel scrolls the overlay --------
-  const handleWheel = (e) => {
-    const el = overlayRef.current;
-    if (!el) return;
+  // ---------------- Core interception logic (fixed to avoid recursion) ----------------
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
-    // if the event started inside the panel and the panel can scroll, let it
-    if (panelRef.current && panelRef.current.contains(e.target)) {
-      const panel = panelRef.current;
-      const canPanelScroll = panel.scrollHeight > panel.clientHeight;
-      if (canPanelScroll) return; // let native panel scrolling happen
-    }
+    window.__CASE_STUDY_OPEN = true;
+    if (!window.mouse) window.mouse = { x: 0, y: 0 };
 
-    // prevent body from scrolling and move the overlay instead
-    e.preventDefault();
-    e.stopPropagation();
-    el.scrollBy({ top: e.deltaY, left: e.deltaX || 0, behavior: 'auto' });
-  };
+    const redispatchToTarget = (origEvt) => {
+      try {
+        const target = origEvt.target;
+        if (!target || !panelRef.current || !panelRef.current.contains(target)) return;
+
+        const init = {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          clientX: origEvt.clientX,
+          clientY: origEvt.clientY,
+          screenX: origEvt.screenX,
+          screenY: origEvt.screenY,
+          movementX: origEvt.movementX || 0,
+          movementY: origEvt.movementY || 0,
+          buttons: origEvt.buttons || 0,
+          relatedTarget: origEvt.relatedTarget || null,
+        };
+
+        try {
+          window.__CS_REDIRECTING = true;
+          let evt;
+          try {
+            evt = new PointerEvent(origEvt.type, init);
+          } catch (e) {
+            evt = new MouseEvent(origEvt.type, init);
+          }
+          target.dispatchEvent(evt);
+        } finally {
+          setTimeout(() => {
+            try { window.__CS_REDIRECTING = false; } catch (e) {}
+          }, 0);
+        }
+      } catch (err) {}
+    };
+
+    const captureMoveBlocker = (e) => {
+      try {
+        if (window.__CS_REDIRECTING) return;
+        if (typeof e.clientX === 'number' && typeof e.clientY === 'number') {
+          window.mouse = { x: e.clientX, y: e.clientY };
+        }
+        if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
+        e.stopPropagation();
+
+        if (panelRef.current && panelRef.current.contains(e.target)) {
+          redispatchToTarget(e);
+        }
+      } catch (err) {}
+    };
+
+    const onWheel = (e) => {
+      try {
+        if (window.__CS_REDIRECTING) return;
+        if (typeof e.clientX === 'number' && typeof e.clientY === 'number') {
+          window.mouse = { x: e.clientX, y: e.clientY };
+        }
+        e.preventDefault();
+        if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
+        e.stopPropagation();
+
+        const overlay = overlayRef.current;
+        if (overlay) overlay.scrollBy({ top: e.deltaY, left: e.deltaX || 0, behavior: "auto" });
+      } catch (err) {}
+    };
+
+    let touchActive = false;
+    let lastY = 0;
+    const onTouchStart = (ev) => {
+      try {
+        if (window.__CS_REDIRECTING) return;
+        touchActive = true;
+        lastY = ev.touches && ev.touches[0] ? ev.touches[0].clientY : 0;
+        if (ev.touches && ev.touches[0]) window.mouse = { x: ev.touches[0].clientX, y: ev.touches[0].clientY };
+      } catch (err) { touchActive = false; lastY = 0; }
+    };
+    const onTouchMove = (ev) => {
+      try {
+        if (window.__CS_REDIRECTING) return;
+        if (!touchActive) return;
+        ev.preventDefault();
+        if (typeof ev.stopImmediatePropagation === "function") ev.stopImmediatePropagation();
+        ev.stopPropagation();
+        const overlay = overlayRef.current;
+        const currY = ev.touches && ev.touches[0] ? ev.touches[0].clientY : lastY;
+        const delta = lastY ? (lastY - currY) : 0;
+        if (overlay && delta) overlay.scrollBy({ top: delta, behavior: "auto" });
+        lastY = currY;
+        if (ev.touches && ev.touches[0]) window.mouse = { x: ev.touches[0].clientX, y: ev.touches[0].clientY };
+      } catch (err) {}
+    };
+
+    window.addEventListener("pointermove", captureMoveBlocker, { capture: true, passive: false });
+    window.addEventListener("mousemove", captureMoveBlocker, { capture: true, passive: false });
+    window.addEventListener("wheel", onWheel, { capture: true, passive: false });
+    window.addEventListener("touchstart", onTouchStart, { capture: true, passive: false });
+    window.addEventListener("touchmove", onTouchMove, { capture: true, passive: false });
+
+    return () => {
+      window.removeEventListener("pointermove", captureMoveBlocker, { capture: true });
+      window.removeEventListener("mousemove", captureMoveBlocker, { capture: true });
+      window.removeEventListener("wheel", onWheel, { capture: true });
+      window.removeEventListener("touchstart", onTouchStart, { capture: true });
+      window.removeEventListener("touchmove", onTouchMove, { capture: true });
+      window.__CASE_STUDY_OPEN = false;
+      try { window.__CS_REDIRECTING = false; } catch (e) {}
+    };
+  }, []);
 
   if (!portalRef.current) return null;
 
@@ -144,12 +245,11 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
     { title: "Tools", info: (project.tools && project.tools.join(", ")) || (project.skills && project.skills.join(", ")) || "Figma, Illustrator" },
   ];
 
+  // SAFE research body extraction: project.research can be an array, a string, or an object
   const researchBody = (() => {
     const r = project.research;
     if (Array.isArray(r)) {
-      return r.map(item => (typeof item === 'string' ? item : (item.finding || item.description || JSON.stringify(item)))).join('
-
-');
+      return r.map(item => (typeof item === 'string' ? item : (item.finding || item.description || JSON.stringify(item)))).join('\n\n');
     }
     if (typeof r === 'string' && r.trim().length) return r;
     if (r && typeof r === 'object') {
@@ -159,6 +259,7 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
     return "User interviews, competitor review, analytics.";
   })();
 
+  // gallery images: prefer project.gallery, fallback to a few placeholders
   const galleryImages = (project.gallery && project.gallery.length) ? project.gallery : (
     project.images && project.images.length ? project.images :
     [
@@ -173,19 +274,27 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
     ]
   );
 
+  // text blocks that can be swapped into the gallery pairs
   const textBlocks = [
     { key: 'challenge', title: 'Challenge', body: project.challenge || project.problem || "Describe the user's problem, constraints, and why solving it mattered." },
     { key: 'research', title: 'Research & Insights', body: researchBody },
     { key: 'solution', title: 'Solution', body: project.solution || "A concise walkthrough of the solution: core features, interaction flow, and key design decisions that solved the challenge." },
     { key: 'impact', title: 'Impact', body: project.impact || project.outcome || "Concrete results and metrics: conversion lift, time saved, retention change, or qualitative outcomes." },
+    // leave learnings out of paired content by default (will render after grid if unused)
   ];
 
-  // build layout (same as before)
-  const layout = [];
-  let gi = 0;
-  let ti = 0;
-  let bigOnLeft = true;
+  // Build layout: start with DOUBLE IMAGES, then alternate pairs starting with TEXT+IMAGE,
+  // i.e. textLeft, then imageLeft, then textLeft... Use pairs until textBlocks exhausted,
+  // then finish by appending DOUBLE IMAGES for remaining images.
+  // Fix: maintain a single "bigOnLeft" toggle that flips after each block (double or pair)
+  // so the "big" (2/3) area alternates left/right across the whole grid.
 
+  const layout = [];
+  let gi = 0; // gallery image index
+  let ti = 0; // text block index
+  let bigOnLeft = true; // controls whether the 2/3 area appears on the left
+
+  // Start with a double images row if possible
   if (gi + 1 < galleryImages.length) {
     layout.push({ type: 'double', imgs: [galleryImages[gi++], galleryImages[gi++]], orientation: bigOnLeft ? 'bigLeft' : 'bigRight' });
     bigOnLeft = !bigOnLeft;
@@ -193,12 +302,20 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
     layout.push({ type: 'single', img: galleryImages[gi++] });
   }
 
+  // Then, while we still have text blocks and images, add alternating pairs (imageLeft or textLeft),
+  // where the image is always the 2/3 column and its side follows bigOnLeft.
   while (ti < textBlocks.length && gi < galleryImages.length) {
     const orientation = bigOnLeft ? 'imageLeft' : 'textLeft';
-    layout.push({ type: 'pair', img: galleryImages[gi++], text: textBlocks[ti++], orientation });
+    layout.push({
+      type: 'pair',
+      img: galleryImages[gi++],
+      text: textBlocks[ti++],
+      orientation
+    });
     bigOnLeft = !bigOnLeft;
   }
 
+  // After text blocks are used up, finish with double image rows for remaining images
   while (gi < galleryImages.length) {
     if (gi + 1 < galleryImages.length) {
       layout.push({ type: 'double', imgs: [galleryImages[gi++], galleryImages[gi++]], orientation: bigOnLeft ? 'bigLeft' : 'bigRight' });
@@ -208,34 +325,30 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
     }
   }
 
+  // any remaining text blocks (not paired) will be rendered after the grid as full-width sections
   const remainingTextBlocks = textBlocks.slice(ti);
 
+  // --- NEW: unified gallery image class (keeps hero untouched) ---
+  // mobile: reasonably tall, md+: match hero height scale for visual rhythm
   const galleryImgClass = "w-full h-[20rem] md:h-[36rem] object-cover rounded-[8px]";
 
   const content = (
     <div
       ref={overlayRef}
       onMouseDown={onOverlayMouseDown}
-      onWheel={handleWheel}
       className="fixed inset-0 z-50 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-label={project.title || "Case study"}
-      style={{
-        // rely on native scrolling for mobile; use overscroll-behavior to contain rubber-band
-        background: 'rgba(0,0,0,0.8)',
-        WebkitOverflowScrolling: 'touch',
-        // do NOT set touchAction to 'pan-y' — allow default (some browsers behave better with 'auto')
-        touchAction: 'auto',
-        overscrollBehavior: 'contain',
-        minHeight: '100dvh', // try to cover dynamic viewport (iOS/Android address bar)
-      }}
     >
-      {/* Inline font loader */}
+      {/* Inline font loader (kept minimal per request). Everything else is Tailwind. */}
       <link
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
       />
+
+      {/* Backdrop */}
+      <div className="fixed inset-0 bg-black/80 pointer-events-auto" aria-hidden />
 
       {/* Panel flow */}
       <div className="relative z-40">
@@ -317,6 +430,7 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
 
             {/* NARRATIVE */}
             <div className="pt-6 space-y-3">
+              {/* first paragraph: left column (1/3) on md, blank to the right to recreate original rhythm */}
               <section className="grid grid-cols-1 md:grid-cols-3 gap-3 pl-3">
                 <div className="md:col-span-1">
                   <p className="text-black text-[16px]">
@@ -326,6 +440,7 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
                 <div className="md:col-span-2" />
               </section>
 
+              {/* PROJECT INFO — restored offset gray boxes (start at column 2, span 2) */}
               <section className="grid grid-cols-1 md:grid-cols-3 ml-12 mr-3 gap-3">
                 <div className="md:col-span-2 md:col-start-2 flex flex-col space-y-3">
                   {projectInfo.map((item, i) => (
@@ -347,6 +462,7 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
                 </div>
               </section>
 
+              {/* ------------- NEW: alternating DOUBLE IMAGES and PAIR (image+text) rows ------------- */}
               <section className="mt-12 space-y-3">
                 {layout.map((block, idx) => {
                   if (block.type === 'single') {
@@ -358,9 +474,11 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
                   }
 
                   if (block.type === 'double') {
+                    // respect orientation: 'bigLeft' or 'bigRight'
                     if (block.orientation === 'bigLeft') {
                       return (
                         <div key={idx} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-stretch">
+                          {/* First image takes 2/3 on md+, second image takes 1/3 to match the text+image pattern */}
                           <div className="order-1 md:order-1 md:col-span-2">
                             <img src={block.imgs[0]} alt={`${project.title || 'project'} - img ${idx + 1}-a`} loading="lazy" className={galleryImgClass} />
                           </div>
@@ -371,8 +489,10 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
                       );
                     }
 
+                    // bigRight
                     return (
                       <div key={idx} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-stretch">
+                        {/* First image takes 1/3 on md+, second image takes 2/3 */}
                         <div className="order-1 md:order-1 md:col-span-1">
                           <img src={block.imgs[0]} alt={`${project.title || 'project'} - img ${idx + 1}-a`} loading="lazy" className={galleryImgClass} />
                         </div>
@@ -383,25 +503,31 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
                     );
                   }
 
+                  // pair: render as 3-column on md+, stacked on small screens
+                  // md: text = 1/3 (col-span-1), image = 2/3 (col-span-2)
                   return (
                     <div key={idx} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-stretch">
                       {block.orientation === 'textLeft' ? (
                         <>
+                          {/* TEXT left (1/3) */}
                           <div className="order-1 md:order-1 md:col-span-1 flex flex-col justify-center px-3">
                             <h3 className="uppercase text-[12px] text-gray-500">{block.text.title}</h3>
                             <div className="mt-2 whitespace-pre-line">{block.text.body}</div>
                           </div>
 
+                          {/* IMAGE right (2/3) */}
                           <div className="order-2 md:order-2 md:col-span-2">
                             <img src={block.img} alt={`${project.title || 'project'} - paired img ${idx + 1}`} loading="lazy" className={galleryImgClass} />
                           </div>
                         </>
                       ) : (
                         <>
+                          {/* IMAGE left (2/3) */}
                           <div className="order-1 md:order-1 md:col-span-2">
                             <img src={block.img} alt={`${project.title || 'project'} - paired img ${idx + 1}`} loading="lazy" className={galleryImgClass} />
                           </div>
 
+                          {/* TEXT right (1/3) */}
                           <div className="order-2 md:order-2 md:col-span-1 flex flex-col justify-center px-3">
                             <h3 className="uppercase text-[12px] text-gray-500">{block.text.title}</h3>
                             <div className="mt-2 text-black whitespace-pre-line">{block.text.body}</div>
@@ -412,6 +538,7 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
                   );
                 })}
 
+                {/* Render any remaining text blocks that weren't paired (full-width) */}
                 {remainingTextBlocks.length > 0 && (
                   <div className="space-y-8 px-3 md:px-6">
                     {remainingTextBlocks.map((tb, i) => (
