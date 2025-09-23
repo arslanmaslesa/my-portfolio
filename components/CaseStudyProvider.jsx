@@ -7,7 +7,7 @@ import CaseStudyContent from './CaseStudyContent';
 /*
   CASE STUDY PROVIDER — overlay functionality only
   - Context / provider
-  - Body lock helpers (iOS-safe + non-iOS)
+  - Body lock helpers (iOS-safe + non-iOS) — unified to position:fixed approach
   - Portal creation
   - --vh handling for mobile
   - Lenis pause/resume
@@ -37,21 +37,19 @@ const lockBody = () => {
   try {
     _savedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
 
+    // Use unified position:fixed body-lock which preserves scroll position by shifting the body
+    // This is more reliable on iOS and Android than setting overflow:hidden on the root.
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${_savedScrollY}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
+    document.body.classList.add('case-study-open');
+
+    // keep documentElement overflow untouched (avoid overflow:hidden which can break scrolling on iOS)
+    // but keep a helper class for iOS-specific tweaks if needed
     if (isIOS()) {
-      // On iOS: avoid position:fixed pitfalls — hide overflow and mark a helper class.
-      document.documentElement.style.overflow = 'hidden';
-      document.body.style.overflow = 'hidden';
-      document.body.style.position = '';
-      document.body.style.top = '';
       document.body.classList.add('case-study-open-ios');
-    } else {
-      // Non-iOS: use position:fixed approach to preserve scroll pos
-      document.body.style.position = 'fixed';
-      document.body.style.top = `-${_savedScrollY}px`;
-      document.body.style.left = '0';
-      document.body.style.right = '0';
-      document.body.style.width = '100%';
-      document.body.classList.add('case-study-open');
     }
   } catch (e) {
     // noop
@@ -59,22 +57,18 @@ const lockBody = () => {
 };
 const unlockBody = () => {
   try {
-    if (isIOS()) {
-      document.documentElement.style.overflow = '';
-      document.body.style.overflow = '';
-      document.body.classList.remove('case-study-open-ios');
-      window.scrollTo(0, _savedScrollY || 0);
-      _savedScrollY = 0;
-    } else {
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.left = '';
-      document.body.style.right = '';
-      document.body.style.width = '';
-      document.body.classList.remove('case-study-open');
-      window.scrollTo(0, _savedScrollY || 0);
-      _savedScrollY = 0;
-    }
+    // Remove fixed positioning and restore scroll position
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.left = '';
+    document.body.style.right = '';
+    document.body.style.width = '';
+    document.body.classList.remove('case-study-open');
+    document.body.classList.remove('case-study-open-ios');
+
+    // restore scroll
+    window.scrollTo(0, _savedScrollY || 0);
+    _savedScrollY = 0;
   } catch (e) {
     // noop
   }
@@ -162,6 +156,7 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
       }
     };
 
+    // non-passive so we can preventDefault when touching outside overlay
     document.addEventListener('touchmove', preventBodyTouch, { passive: false });
 
     return () => {
@@ -220,11 +215,12 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
       aria-label={project.title || 'Case study'}
       className="fixed inset-0 z-50 bg-black/80"
       style={{
-        height: '100dvh',
-        maxHeight: '100dvh',
+        // use the --vh fallback variable previously set for consistent mobile height
+        height: 'calc(var(--vh, 1vh) * 100)',
+        maxHeight: 'calc(var(--vh, 1vh) * 100)',
         overflowY: 'auto',
-        WebkitOverflowScrolling: 'touch',
-        touchAction: 'auto',
+        WebkitOverflowScrolling: 'touch', // momentum scrolling for iOS
+        touchAction: 'pan-y', // explicitly allow vertical panning (prevents gesture blockers)
         overscrollBehavior: 'contain',
         position: 'fixed',
         inset: 0,
