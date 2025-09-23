@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -6,11 +6,11 @@ import { createPortal } from "react-dom";
 /*
   CASE STUDY PROVIDER — robust overlay (fixes mobile visible height + touch scrolling)
   - Sets CSS --vh on mount & resize so height matches visible viewport on iOS.
-  - Uses fixed inset-0 and height: calc(var(--vh, 1vh) * 100) with maxHeight: 100dvh.
+  - Uses fixed inset-0 and height: calc(var(--vh, 1vh) * 100) with maxHeight: 100vh.
   - Enables -webkit-overflow-scrolling: touch and touchAction: pan-y.
-  - Prevents accidental "tap-to-close" while scrolling by tracking touchmove.
+  - Prevents accidental "tap-to-close" while scrolling by tracking touchmove with a threshold.
   - Keeps lenis pause/resume and ESC-to-close.
-  - Adds safe onWheel fallback for desktop wheel/trackpad cases.
+  - Uses body-lock via position:fixed (preserves scroll position on iOS).
 */
 
 const CaseStudyContext = createContext(null);
@@ -20,6 +20,32 @@ export const useCaseStudy = () => {
   return ctx;
 };
 
+// --- body lock helpers (position: fixed approach preserves scroll position and avoids iOS overflow bugs)
+let _savedScrollY = 0;
+const lockBody = () => {
+  try {
+    _savedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${_savedScrollY}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
+    document.body.classList.add('case-study-open');
+  } catch (e) { /* noop */ }
+};
+const unlockBody = () => {
+  try {
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.left = '';
+    document.body.style.right = '';
+    document.body.style.width = '';
+    document.body.classList.remove('case-study-open');
+    window.scrollTo(0, _savedScrollY || 0);
+    _savedScrollY = 0;
+  } catch (e) { /* noop */ }
+};
+
 export const CaseStudyProvider = ({ children, lenis = null }) => {
   const [open, setOpen] = useState(false);
   const [project, setProject] = useState(null);
@@ -27,20 +53,14 @@ export const CaseStudyProvider = ({ children, lenis = null }) => {
   const openCaseStudy = (proj) => {
     setProject(proj || null);
     setOpen(true);
-    if (typeof document !== "undefined") {
-      document.body.style.overflow = "hidden";
-      document.body.classList.add("case-study-open");
-    }
+    if (typeof document !== "undefined") lockBody();
     if (typeof window !== "undefined") window.__CASE_STUDY_OPEN = true;
   };
 
   const closeCaseStudy = () => {
     setOpen(false);
     setTimeout(() => setProject(null), 180);
-    if (typeof document !== "undefined") {
-      document.body.style.overflow = "";
-      document.body.classList.remove("case-study-open");
-    }
+    if (typeof document !== "undefined") unlockBody();
     if (typeof window !== "undefined") window.__CASE_STUDY_OPEN = false;
   };
 
@@ -61,8 +81,10 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
   const panelRef = useRef(null);   // the card/panel inside overlay
   const lenisPaused = useRef(false);
 
-  // used to avoid closing when user is scrolling via touch
+  // used to avoid closing when user is scrolling via touch (with threshold)
   const touchMovedRef = useRef(false);
+  const touchStartY = useRef(0);
+  const TOUCH_MOVE_THRESHOLD = 8; // px
 
   // create portal root synchronously (client-only)
   if (typeof document !== "undefined" && !portalRef.current) {
@@ -221,14 +243,17 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
       role="dialog"
       aria-modal="true"
       aria-label={project.title || "Case study"}
-      className="fixed inset-0 z-50 overflow-y-auto bg-black/80"
+      className="fixed inset-0 z-50 bg-black/80"
       style={{
-        // prefer the JS-set --vh (calc(var(--vh, 1vh) * 100)) but cap at 100dvh where supported
+        // prefer the JS-set --vh (calc(var(--vh, 1vh) * 100)) but cap at 100vh where supported
         height: 'calc(var(--vh, 1vh) * 100)',
-        maxHeight: '100dvh',
-        WebkitOverflowScrolling: "touch",
-        touchAction: "pan-y",
+        maxHeight: '100vh',
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        touchAction: 'pan-y',
         overscrollBehavior: 'contain',
+        position: 'fixed',
+        inset: 0,
       }}
 
       // Desktop: safe onWheel fallback to ensure wheel/trackpad scrolls overlay when required
@@ -259,15 +284,24 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
       }}
 
       // Track touch movement to avoid closing when user scrolls (mobile)
-      onTouchStart={() => { touchMovedRef.current = false; }}
-      onTouchMove={() => { touchMovedRef.current = true; }}
+      onTouchStart={(e) => {
+        touchMovedRef.current = false;
+        if (e.touches && e.touches[0]) touchStartY.current = e.touches[0].clientY;
+      }}
+      onTouchMove={(e) => {
+        if (e.touches && e.touches[0]) {
+          const delta = Math.abs(e.touches[0].clientY - (touchStartY.current || 0));
+          if (delta > TOUCH_MOVE_THRESHOLD) touchMovedRef.current = true;
+        }
+      }}
       onTouchEnd={(e) => {
-        // If user tapped without moving, check if target is outside panel and then close.
+        // If user tapped without meaningful move, check if target is outside panel and then close.
         if (!touchMovedRef.current) {
           if (panelRef.current && panelRef.current.contains(e.target)) return;
           onClose();
         }
         touchMovedRef.current = false;
+        touchStartY.current = 0;
       }}
     >
       {/* Inline font loader */}
