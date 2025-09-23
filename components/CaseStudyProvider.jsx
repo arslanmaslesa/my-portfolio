@@ -1,49 +1,87 @@
-"use client";
+'use client';
 
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import CaseStudyContent from './CaseStudyContent';
 
 /*
-  CASE STUDY PROVIDER — robust overlay (fixes mobile visible height + touch scrolling)
-  - Sets CSS --vh on mount & resize so height matches visible viewport on iOS.
-  - Uses fixed inset-0 and height: calc(var(--vh, 1vh) * 100) with maxHeight: 100vh.
-  - Enables -webkit-overflow-scrolling: touch and touchAction: pan-y.
-  - Prevents accidental "tap-to-close" while scrolling by tracking touchmove with a threshold.
-  - Keeps lenis pause/resume and ESC-to-close.
-  - Uses body-lock via position:fixed (preserves scroll position on iOS).
+  CASE STUDY PROVIDER — overlay functionality only
+  - Context / provider
+  - Body lock helpers (position:fixed) to preserve scroll on iOS
+  - Portal creation
+  - --vh handling for mobile
+  - Lenis pause/resume
+  - ESC to close
+  - Overlay shell with wheel / touch / click handlers
+  - Presentation delegated to CaseStudyContent
 */
 
 const CaseStudyContext = createContext(null);
 export const useCaseStudy = () => {
   const ctx = useContext(CaseStudyContext);
-  if (!ctx) throw new Error("useCaseStudy must be used inside CaseStudyProvider");
+  if (!ctx) throw new Error('useCaseStudy must be used inside CaseStudyProvider');
   return ctx;
 };
 
-// --- body lock helpers (position: fixed approach preserves scroll position and avoids iOS overflow bugs)
+// --- small helper to detect iOS devices reliably enough for this use-case
+const isIOS = () => {
+  if (typeof navigator === 'undefined' || typeof window === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  // covers iPhone/iPad/iPod and iPadOS (which reports MacIntel sometimes)
+  return /iP(ad|hone|od)/.test(ua) || (ua.includes('Mac') && 'ontouchend' in document);
+};
+
+// --- body lock helpers
 let _savedScrollY = 0;
 const lockBody = () => {
   try {
     _savedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${_savedScrollY}px`;
-    document.body.style.left = '0';
-    document.body.style.right = '0';
-    document.body.style.width = '100%';
-    document.body.classList.add('case-study-open');
-  } catch (e) { /* noop */ }
+
+    if (isIOS()) {
+      // On iOS Safari overflow:hidden on <body> is sometimes ignored when used alone.
+      // We avoid position:fixed on iOS because some devices prevent scrolling of inner fixed elements.
+      // Instead: hide overflow on html/body and keep the scroll position via transform on a wrapper class.
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.classList.add('case-study-open-ios');
+    } else {
+      // Non-iOS: use position:fixed approach which reliably locks the page and preserves scroll pos
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${_savedScrollY}px`;
+      document.body.style.left = '0';
+      document.body.style.right = '0';
+      document.body.style.width = '100%';
+      document.body.classList.add('case-study-open');
+    }
+  } catch (e) {
+    // noop
+  }
 };
 const unlockBody = () => {
   try {
-    document.body.style.position = '';
-    document.body.style.top = '';
-    document.body.style.left = '';
-    document.body.style.right = '';
-    document.body.style.width = '';
-    document.body.classList.remove('case-study-open');
-    window.scrollTo(0, _savedScrollY || 0);
-    _savedScrollY = 0;
-  } catch (e) { /* noop */ }
+    if (isIOS()) {
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+      document.body.classList.remove('case-study-open-ios');
+      // restore scroll if possible
+      window.scrollTo(0, _savedScrollY || 0);
+      _savedScrollY = 0;
+    } else {
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
+      document.body.style.width = '';
+      document.body.classList.remove('case-study-open');
+      // restore scroll (readjust for the saved offset)
+      window.scrollTo(0, _savedScrollY || 0);
+      _savedScrollY = 0;
+    }
+  } catch (e) {
+    // noop
+  }
 };
 
 export const CaseStudyProvider = ({ children, lenis = null }) => {
@@ -53,15 +91,15 @@ export const CaseStudyProvider = ({ children, lenis = null }) => {
   const openCaseStudy = (proj) => {
     setProject(proj || null);
     setOpen(true);
-    if (typeof document !== "undefined") lockBody();
-    if (typeof window !== "undefined") window.__CASE_STUDY_OPEN = true;
+    if (typeof document !== 'undefined') lockBody();
+    if (typeof window !== 'undefined') window.__CASE_STUDY_OPEN = true;
   };
 
   const closeCaseStudy = () => {
     setOpen(false);
     setTimeout(() => setProject(null), 180);
-    if (typeof document !== "undefined") unlockBody();
-    if (typeof window !== "undefined") window.__CASE_STUDY_OPEN = false;
+    if (typeof document !== 'undefined') unlockBody();
+    if (typeof window !== 'undefined') window.__CASE_STUDY_OPEN = false;
   };
 
   return (
@@ -74,11 +112,11 @@ export const CaseStudyProvider = ({ children, lenis = null }) => {
 
 export default CaseStudyProvider;
 
-/* ---------------- CaseStudyOverlay (final robust) ---------------- */
+/* ---------------- CaseStudyOverlay (overlay shell + handlers) ---------------- */
 const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
   const portalRef = useRef(null);
   const overlayRef = useRef(null); // overlay scroll container
-  const panelRef = useRef(null);   // the card/panel inside overlay
+  const panelRef = useRef(null); // the card/panel inside overlay
   const lenisPaused = useRef(false);
 
   // used to avoid closing when user is scrolling via touch (with threshold)
@@ -87,11 +125,11 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
   const TOUCH_MOVE_THRESHOLD = 8; // px
 
   // create portal root synchronously (client-only)
-  if (typeof document !== "undefined" && !portalRef.current) {
-    let el = document.getElementById("case-study-root");
+  if (typeof document !== 'undefined' && !portalRef.current) {
+    let el = document.getElementById('case-study-root');
     if (!el) {
-      el = document.createElement("div");
-      el.id = "case-study-root";
+      el = document.createElement('div');
+      el.id = 'case-study-root';
       document.body.appendChild(el);
     }
     portalRef.current = el;
@@ -116,10 +154,10 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
   // Pause lenis when overlay opens
   useEffect(() => {
     try {
-      if (lenis && typeof lenis.stop === "function") {
+      if (lenis && typeof lenis.stop === 'function') {
         lenis.stop();
         lenisPaused.current = true;
-      } else if (lenis && typeof lenis.pause === "function") {
+      } else if (lenis && typeof lenis.pause === 'function') {
         lenis.pause();
         lenisPaused.current = true;
       }
@@ -130,8 +168,8 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
     return () => {
       try {
         if (lenis && lenisPaused.current) {
-          if (typeof lenis.start === "function") lenis.start();
-          else if (typeof lenis.resume === "function") lenis.resume();
+          if (typeof lenis.start === 'function') lenis.start();
+          else if (typeof lenis.resume === 'function') lenis.resume();
         }
       } catch (e) {}
     };
@@ -140,112 +178,30 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
   // ESC to close
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === "Escape") {
+      if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
       }
     };
 
-    window.addEventListener("keydown", onKey, { passive: false });
+    window.addEventListener('keydown', onKey, { passive: false });
 
     return () => {
-      window.removeEventListener("keydown", onKey);
+      window.removeEventListener('keydown', onKey);
     };
   }, [onClose]);
 
   if (!portalRef.current) return null;
 
-  const hero = project.image || project.video || project.heroColor || null;
-  const categories = project.categories || project.tags || [];
-
-  const projectInfo = project.info || [
-    { title: "Role", info: project.role || "Product Designer" },
-    { title: "Duration", info: project.timeline || project.duration || "2 weeks" },
-    { title: "Client", info: project.client || project.title || "Hotel Kapetanovina" },
-    { title: "Deliverables", info: project.deliverables || "Visit card design, branding assets" },
-    { title: "Tools", info: (project.tools && project.tools.join(", ")) || (project.skills && project.skills.join(", ")) || "Figma, Illustrator" },
-  ];
-
-  const researchBody = (() => {
-    const r = project.research;
-    if (Array.isArray(r)) {
-      return r.map(item => (typeof item === 'string' ? item : (item.finding || item.description || JSON.stringify(item)))).join('\n\n');
-    }
-    if (typeof r === 'string' && r.trim().length) return r;
-    if (r && typeof r === 'object') {
-      if (r.finding || r.description) return r.finding || r.description;
-      try { return JSON.stringify(r); } catch (e) { return '' }
-    }
-    return "User interviews, competitor review, analytics.";
-  })();
-
-  const galleryImages = (project.gallery && project.gallery.length) ? project.gallery : (
-    project.images && project.images.length ? project.images :
-    [
-      "https://picsum.photos/seed/p1/1200/800",
-      "https://picsum.photos/seed/p2/1200/800",
-      "https://picsum.photos/seed/p3/1200/800",
-      "https://picsum.photos/seed/p4/1200/800",
-      "https://picsum.photos/seed/p5/1200/800",
-      "https://picsum.photos/seed/p6/1200/800",
-      "https://picsum.photos/seed/p7/1200/800",
-      "https://picsum.photos/seed/p8/1200/800",
-    ]
-  );
-
-  const textBlocks = [
-    { key: 'challenge', title: 'Challenge', body: project.challenge || project.problem || "Describe the user's problem, constraints, and why solving it mattered." },
-    { key: 'research', title: 'Research & Insights', body: researchBody },
-    { key: 'solution', title: 'Solution', body: project.solution || "A concise walkthrough of the solution: core features, interaction flow, and key design decisions that solved the challenge." },
-    { key: 'impact', title: 'Impact', body: project.impact || project.outcome || "Concrete results and metrics: conversion lift, time saved, retention change, or qualitative outcomes." },
-  ];
-
-  // Build gallery layout (same logic as before)
-  const layout = [];
-  let gi = 0; // gallery image index
-  let ti = 0; // text block index
-  let bigOnLeft = true;
-
-  if (gi + 1 < galleryImages.length) {
-    layout.push({ type: 'double', imgs: [galleryImages[gi++], galleryImages[gi++]], orientation: bigOnLeft ? 'bigLeft' : 'bigRight' });
-    bigOnLeft = !bigOnLeft;
-  } else if (gi < galleryImages.length) {
-    layout.push({ type: 'single', img: galleryImages[gi++] });
-  }
-
-  while (ti < textBlocks.length && gi < galleryImages.length) {
-    const orientation = bigOnLeft ? 'imageLeft' : 'textLeft';
-    layout.push({
-      type: 'pair',
-      img: galleryImages[gi++],
-      text: textBlocks[ti++],
-      orientation
-    });
-    bigOnLeft = !bigOnLeft;
-  }
-
-  while (gi < galleryImages.length) {
-    if (gi + 1 < galleryImages.length) {
-      layout.push({ type: 'double', imgs: [galleryImages[gi++], galleryImages[gi++]], orientation: bigOnLeft ? 'bigLeft' : 'bigRight' });
-      bigOnLeft = !bigOnLeft;
-    } else {
-      layout.push({ type: 'single', img: galleryImages[gi++] });
-    }
-  }
-
-  const remainingTextBlocks = textBlocks.slice(ti);
-  const galleryImgClass = "w-full h-[20rem] md:h-[36rem] object-cover rounded-[8px]";
-
-  // --- overlay content ---
+  // content will receive the refs so it can stop propagation when needed
   const content = (
     <div
       ref={overlayRef}
       role="dialog"
       aria-modal="true"
-      aria-label={project.title || "Case study"}
+      aria-label={project.title || 'Case study'}
       className="fixed inset-0 z-50 bg-black/80"
       style={{
-        // prefer the JS-set --vh (calc(var(--vh, 1vh) * 100)) but cap at 100vh where supported
         height: 'calc(var(--vh, 1vh) * 100)',
         maxHeight: '100vh',
         overflowY: 'auto',
@@ -303,207 +259,27 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
         touchMovedRef.current = false;
         touchStartY.current = 0;
       }}
-    >
-      {/* Inline font loader */}
-      <link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
-      />
 
-      {/* Panel flow */}
+      // Ensure overlay itself can receive focus which helps with some mobile scrolling focus quirks
+      tabIndex={-1}
+    >
+      {/* Inline font loader (presentation-related but kept here to ensure fonts are present even if presentation file is lazy loaded) */}
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" />
+
+      {/* Panel flow: delegate all content/markup/styling to CaseStudyContent */}
       <div className="relative z-40">
         <div className="mx-6 my-6 md:mx-28" style={{ marginBottom: '3rem' }}>
-          <article
-            ref={panelRef}
-            className="relative bg-white overflow-visible text-black p-3 xxl:p-6 rounded-[12px] font-sans"
-            onClick={(e) => e.stopPropagation()}
-            style={{ fontFamily: "'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial" }}
-          >
-
-            {/* CLOSE */}
-            <button
-              data-cs-close
-              onClick={(e) => { e.stopPropagation(); onClose(); }}
-              aria-label="Close case study"
-              className="absolute top-3 right-3 h-9 w-9 2xl:h-16 2xl:w-16 rounded-full bg-gray-100 flex items-center justify-center transition-colors duration-500 hover:bg-black group"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                className="h-4 w-4 text-black transition-colors duration-300 group-hover:text-white"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M6 6 L18 18 M6 18 L18 6" />
-              </svg>
-            </button>
-
-            {/* HEADER */}
-            <header className="pt-36 pb-3">
-              <div className="flex items-end gap-12">
-                <div className="pb-3 flex flex-col gap-0 w-36 shrink-0">
-                  {categories && categories.length > 0 ? (
-                    categories.slice(0, 6).map((c, i) => (
-                      <span key={i} className="text-[16px] text-black w-full text-left">
-                        {typeof c === 'string' ? c : (c.label || c)}
-                      </span>
-                    ))
-                  ) : (
-                    <>
-                      <span className="text-[16px] text-black w-full text-left">UI/UX</span>
-                      <span className="text-[16px] text-black w-full text-left">Product Design</span>
-                      <span className="text-[16px] text-black w-full text-left">Branding</span>
-                    </>
-                  )}
-                </div>
-
-                <div className="flex-1">
-                  <h1 className="text-[48px] font-[400] tracking-[-0.04em]">
-                    {project.title || "Project Title"}
-                  </h1>
-                </div>
-              </div>
-            </header>
-
-            {/* HERO */}
-            {hero && (
-              <section>
-                {project.video ? (
-                  <div className="overflow-hidden mb-6 rounded-[8px]">
-                    <video src={project.video} controls className="w-full h-auto object-cover rounded-[8px]" />
-                  </div>
-                ) : project.image2 ? (
-                  <div className="overflow-hidden mb-6 rounded-[8px]">
-                    <img src={project.image2} alt={project.title || "hero"} className="w-full h-[29rem] md:h-[36rem] object-cover rounded-[8px]" />
-                  </div>
-                ) : (
-                  <div className="mb-6 h-44 md:h-56 flex items-center justify-center rounded-[8px]" style={{ background: project.heroColor || "#f3f4f6" }}>
-                    <span className="text-neutral-600">{project.title || "Visual"}</span>
-                  </div>
-                )}
-              </section>
-            )}
-
-            {/* NARRATIVE */}
-            <div className="pt-6 space-y-3">
-              <section className="grid grid-cols-1 md:grid-cols-3 gap-3 pl-3">
-                <div className="md:col-span-1">
-                  <p className="text-black text-[16px]">
-                    {project.summary || "One-paragraph summary that hooks the reader: what this project was about, who it was for, and the primary impact."}
-                  </p>
-                </div>
-                <div className="md:col-span-2" />
-              </section>
-
-              {/* PROJECT INFO */}
-              <section className="grid grid-cols-1 md:grid-cols-3 ml-12 mr-3 gap-3">
-                <div className="md:col-span-2 md:col-start-2 flex flex-col space-y-3">
-                  {projectInfo.map((item, i) => (
-                    <div
-                      key={i}
-                      className="bg-gray-100 p-3 rounded-[8px] flex items-center justify-between gap-3"
-                      role="group"
-                      aria-label={`${item.title}: ${item.info}`}
-                    >
-                      <div className="uppercase text-black text-[16px] leading-tight flex-shrink-0">
-                        {item.title}
-                      </div>
-
-                      <div className="flex-1 text-right text-black text-[16px] break-words ml-3">
-                        {item.info}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              {/* GALLERY */}
-              <section className="mt-12 space-y-3">
-                {layout.map((block, idx) => {
-                  if (block.type === 'single') {
-                    return (
-                      <div key={idx} className="w-full">
-                        <img src={block.img} alt={`${project.title || 'project'} - img ${idx + 1}`} loading="lazy" className={galleryImgClass} />
-                      </div>
-                    );
-                  }
-
-                  if (block.type === 'double') {
-                    if (block.orientation === 'bigLeft') {
-                      return (
-                        <div key={idx} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-stretch">
-                          <div className="order-1 md:order-1 md:col-span-2">
-                            <img src={block.imgs[0]} alt={`${project.title || 'project'} - img ${idx + 1}-a`} loading="lazy" className={galleryImgClass} />
-                          </div>
-                          <div className="order-2 md:order-2 md:col-span-1">
-                            <img src={block.imgs[1]} alt={`${project.title || 'project'} - img ${idx + 1}-b`} loading="lazy" className={galleryImgClass} />
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div key={idx} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-stretch">
-                        <div className="order-1 md:order-1 md:col-span-1">
-                          <img src={block.imgs[0]} alt={`${project.title || 'project'} - img ${idx + 1}-a`} loading="lazy" className={galleryImgClass} />
-                        </div>
-                        <div className="order-2 md:order-2 md:col-span-2">
-                          <img src={block.imgs[1]} alt={`${project.title || 'project'} - img ${idx + 1}-b`} loading="lazy" className={galleryImgClass} />
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div key={idx} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-stretch">
-                      {block.orientation === 'textLeft' ? (
-                        <>
-                          <div className="order-1 md:order-1 md:col-span-1 flex flex-col justify-center px-3">
-                            <h3 className="uppercase text-[12px] text-gray-500">{block.text.title}</h3>
-                            <div className="mt-2 whitespace-pre-line">{block.text.body}</div>
-                          </div>
-
-                          <div className="order-2 md:order-2 md:col-span-2">
-                            <img src={block.img} alt={`${project.title || 'project'} - paired img ${idx + 1}`} loading="lazy" className={galleryImgClass} />
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="order-1 md:order-1 md:col-span-2">
-                            <img src={block.img} alt={`${project.title || 'project'} - paired img ${idx + 1}`} loading="lazy" className={galleryImgClass} />
-                          </div>
-
-                          <div className="order-2 md:order-2 md:col-span-1 flex flex-col justify-center px-3">
-                            <h3 className="uppercase text-[12px] text-gray-500">{block.text.title}</h3>
-                            <div className="mt-2 text-black whitespace-pre-line">{block.text.body}</div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {remainingTextBlocks.length > 0 && (
-                  <div className="space-y-8 px-3 md:px-6">
-                    {remainingTextBlocks.map((tb, i) => (
-                      <div key={tb.key || i}>
-                        <h3 className="font-semibold">{tb.title}</h3>
-                        <p className="mt-2 text-neutral-700 whitespace-pre-line">{tb.body}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
-
-            </div>
-
-          </article>
+          <CaseStudyContent project={project} onClose={onClose} panelRef={panelRef} />
         </div>
       </div>
+
+      {/* Small runtime styles to help iOS body-lock case without a global stylesheet */}
+      <style>{`
+        /* When we lock on iOS we add a helper class to body. Keep this minimal and scoped. */
+        body.case-study-open-ios { -webkit-overflow-scrolling: touch; }
+        /* ensure overlays can't accidentally allow background touch-through */
+        #case-study-root { pointer-events: auto; }
+      `}</style>
     </div>
   );
 
