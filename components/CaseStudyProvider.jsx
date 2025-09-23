@@ -4,11 +4,11 @@ import React, { createContext, useContext, useEffect, useRef, useState } from "r
 import { createPortal } from "react-dom";
 
 /*
-  CASE STUDY PROVIDER — Tailwind-first version (fixed for desktop+mobile)
-  - Adds a desktop wheel handler so wheel/trackpad scroll works when overlay is open
-  - Keeps mobile touch handling that prevents rubber-banding but allows native overlay scrolling
-  - Backdrop lives on the overlay container (so it doesn't steal pointer events)
-  - Uses 100dvh to avoid iOS address-bar gaps
+  CASE STUDY PROVIDER — Tailwind-first version (mobile fix)
+  - Removed custom touchmove handlers that were interfering with native scrolling on some mobile browsers
+  - Rely on native scrolling with `-webkit-overflow-scrolling: touch` and `overscroll-behavior: contain` to prevent body rubber-band
+  - Keep desktop wheel handler so trackpad/mouse wheel scroll works
+  - If mobile still misbehaves, switching to make the panel itself the scroll container is the next straightforward step
 */
 
 const CaseStudyContext = createContext(null);
@@ -52,7 +52,7 @@ export const CaseStudyProvider = ({ children, lenis = null }) => {
 
 export default CaseStudyProvider;
 
-/* ---------------- CaseStudyOverlay (desktop wheel + mobile touch handling) ---------------- */
+/* ---------------- CaseStudyOverlay (cleaner mobile behavior) ---------------- */
 const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
   const portalRef = useRef(null);
   const overlayRef = useRef(null); // scroll container + backdrop
@@ -113,56 +113,13 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
     onClose();
   };
 
-  // -------- touch scrolling / overscroll containment for mobile --------
-  useEffect(() => {
-    const el = overlayRef.current;
-    if (!el) return;
-
-    let startY = 0;
-
-    const onTouchStart = (ev) => {
-      if (!ev.touches || ev.touches.length === 0) return;
-      startY = ev.touches[0].clientY;
-    };
-
-    const onTouchMove = (ev) => {
-      if (!ev.touches || ev.touches.length === 0) return;
-      const currY = ev.touches[0].clientY;
-      const deltaY = currY - startY; // positive when pulling down
-
-      // if at top and pulling down -> prevent body rubber band
-      if (el.scrollTop === 0 && deltaY > 0) {
-        ev.preventDefault();
-        return;
-      }
-
-      // if at bottom and pushing up -> prevent body rubber band
-      if (el.scrollHeight - el.clientHeight - el.scrollTop <= 1 && deltaY < 0) {
-        ev.preventDefault();
-        return;
-      }
-
-      // otherwise allow overlay to scroll natively
-    };
-
-    el.addEventListener("touchstart", onTouchStart, { passive: true });
-    el.addEventListener("touchmove", onTouchMove, { passive: false });
-
-    return () => {
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove", onTouchMove);
-    };
-  }, []);
-
   // -------- desktop wheel / trackpad handling so wheel scrolls the overlay --------
-  // React's onWheel is non-passive so preventDefault works there.
   const handleWheel = (e) => {
     const el = overlayRef.current;
     if (!el) return;
 
     // if the event started inside the panel and the panel can scroll, let it
     if (panelRef.current && panelRef.current.contains(e.target)) {
-      // If the panel itself is scrollable, don't hijack. Check if panel has scrollable overflow.
       const panel = panelRef.current;
       const canPanelScroll = panel.scrollHeight > panel.clientHeight;
       if (canPanelScroll) return; // let native panel scrolling happen
@@ -171,8 +128,6 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
     // prevent body from scrolling and move the overlay instead
     e.preventDefault();
     e.stopPropagation();
-
-    // Some mice/trackpads send very small deltas; just apply them
     el.scrollBy({ top: e.deltaY, left: e.deltaX || 0, behavior: 'auto' });
   };
 
@@ -192,7 +147,9 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
   const researchBody = (() => {
     const r = project.research;
     if (Array.isArray(r)) {
-      return r.map(item => (typeof item === 'string' ? item : (item.finding || item.description || JSON.stringify(item)))).join('\n\n');
+      return r.map(item => (typeof item === 'string' ? item : (item.finding || item.description || JSON.stringify(item)))).join('
+
+');
     }
     if (typeof r === 'string' && r.trim().length) return r;
     if (r && typeof r === 'object') {
@@ -265,10 +222,11 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
       aria-modal="true"
       aria-label={project.title || "Case study"}
       style={{
-        // backdrop and scroll friendly styles
+        // rely on native scrolling for mobile; use overscroll-behavior to contain rubber-band
         background: 'rgba(0,0,0,0.8)',
         WebkitOverflowScrolling: 'touch',
-        touchAction: 'pan-y',
+        // do NOT set touchAction to 'pan-y' — allow default (some browsers behave better with 'auto')
+        touchAction: 'auto',
         overscrollBehavior: 'contain',
         minHeight: '100dvh', // try to cover dynamic viewport (iOS/Android address bar)
       }}
