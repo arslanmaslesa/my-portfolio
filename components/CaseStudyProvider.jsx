@@ -7,7 +7,7 @@ import CaseStudyContent from './CaseStudyContent';
 /*
   CASE STUDY PROVIDER — overlay functionality only
   - Context / provider
-  - Body lock helpers (position:fixed) to preserve scroll on iOS
+  - Body lock helpers (iOS-safe + non-iOS)
   - Portal creation
   - --vh handling for mobile
   - Lenis pause/resume
@@ -27,7 +27,7 @@ export const useCaseStudy = () => {
 const isIOS = () => {
   if (typeof navigator === 'undefined' || typeof window === 'undefined') return false;
   const ua = navigator.userAgent || '';
-  // covers iPhone/iPad/iPod and iPadOS (which reports MacIntel sometimes)
+  // covers iPhone/iPad/iPod and iPadOS (which sometimes reports Mac)
   return /iP(ad|hone|od)/.test(ua) || (ua.includes('Mac') && 'ontouchend' in document);
 };
 
@@ -38,16 +38,14 @@ const lockBody = () => {
     _savedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
 
     if (isIOS()) {
-      // On iOS Safari overflow:hidden on <body> is sometimes ignored when used alone.
-      // We avoid position:fixed on iOS because some devices prevent scrolling of inner fixed elements.
-      // Instead: hide overflow on html/body and keep the scroll position via transform on a wrapper class.
+      // On iOS: avoid position:fixed pitfalls — hide overflow and mark a helper class.
       document.documentElement.style.overflow = 'hidden';
       document.body.style.overflow = 'hidden';
       document.body.style.position = '';
       document.body.style.top = '';
       document.body.classList.add('case-study-open-ios');
     } else {
-      // Non-iOS: use position:fixed approach which reliably locks the page and preserves scroll pos
+      // Non-iOS: use position:fixed approach to preserve scroll pos
       document.body.style.position = 'fixed';
       document.body.style.top = `-${_savedScrollY}px`;
       document.body.style.left = '0';
@@ -65,7 +63,6 @@ const unlockBody = () => {
       document.documentElement.style.overflow = '';
       document.body.style.overflow = '';
       document.body.classList.remove('case-study-open-ios');
-      // restore scroll if possible
       window.scrollTo(0, _savedScrollY || 0);
       _savedScrollY = 0;
     } else {
@@ -75,7 +72,6 @@ const unlockBody = () => {
       document.body.style.right = '';
       document.body.style.width = '';
       document.body.classList.remove('case-study-open');
-      // restore scroll (readjust for the saved offset)
       window.scrollTo(0, _savedScrollY || 0);
       _savedScrollY = 0;
     }
@@ -151,6 +147,28 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
     };
   }, []);
 
+  // Focus overlay and install a document touchmove blocker that allows scrolling inside the overlay
+  useEffect(() => {
+    const el = overlayRef.current;
+    if (!el) return;
+
+    try { el.focus(); } catch (e) {}
+
+    const preventBodyTouch = (ev) => {
+      // When user is touching outside the overlay, block default to stop background scrolling.
+      // If touch is inside overlay, do nothing and allow overlay scroll.
+      if (!el.contains(ev.target)) {
+        ev.preventDefault();
+      }
+    };
+
+    document.addEventListener('touchmove', preventBodyTouch, { passive: false });
+
+    return () => {
+      document.removeEventListener('touchmove', preventBodyTouch, { passive: false });
+    };
+  }, []);
+
   // Pause lenis when overlay opens
   useEffect(() => {
     try {
@@ -202,15 +220,17 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
       aria-label={project.title || 'Case study'}
       className="fixed inset-0 z-50 bg-black/80"
       style={{
-        height: 'calc(var(--vh, 1vh) * 100)',
-        maxHeight: '100vh',
+        height: '100dvh',
+        maxHeight: '100dvh',
         overflowY: 'auto',
         WebkitOverflowScrolling: 'touch',
-        touchAction: 'pan-y',
+        touchAction: 'auto',
         overscrollBehavior: 'contain',
         position: 'fixed',
         inset: 0,
       }}
+      // Ensure overlay itself can receive focus which helps with some mobile scrolling focus quirks
+      tabIndex={-1}
 
       // Desktop: safe onWheel fallback to ensure wheel/trackpad scrolls overlay when required
       onWheel={(e) => {
@@ -259,9 +279,6 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
         touchMovedRef.current = false;
         touchStartY.current = 0;
       }}
-
-      // Ensure overlay itself can receive focus which helps with some mobile scrolling focus quirks
-      tabIndex={-1}
     >
       {/* Inline font loader (presentation-related but kept here to ensure fonts are present even if presentation file is lazy loaded) */}
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" />
