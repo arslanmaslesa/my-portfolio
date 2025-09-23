@@ -4,11 +4,13 @@ import React, { createContext, useContext, useEffect, useRef, useState } from "r
 import { createPortal } from "react-dom";
 
 /*
-  CASE STUDY PROVIDER — Robust overlay
-  - fixed inset-0 for desktop, JS --vh fallback for mobile iOS
-  - overlay scrolls on wheel/trackpad and touch anywhere inside
-  - overlay closes on click outside panel
-  - keeps lenis pause/resume and ESC-to-close
+  CASE STUDY PROVIDER — robust overlay (fixes mobile visible height + touch scrolling)
+  - Sets CSS --vh on mount & resize so height matches visible viewport on iOS.
+  - Uses fixed inset-0 and height: calc(var(--vh, 1vh) * 100) with maxHeight: 100dvh.
+  - Enables -webkit-overflow-scrolling: touch and touchAction: pan-y.
+  - Prevents accidental "tap-to-close" while scrolling by tracking touchmove.
+  - Keeps lenis pause/resume and ESC-to-close.
+  - Adds safe onWheel fallback for desktop wheel/trackpad cases.
 */
 
 const CaseStudyContext = createContext(null);
@@ -52,12 +54,15 @@ export const CaseStudyProvider = ({ children, lenis = null }) => {
 
 export default CaseStudyProvider;
 
-/* ---------------- CaseStudyOverlay (desktop + mobile robust) ---------------- */
+/* ---------------- CaseStudyOverlay (final robust) ---------------- */
 const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
   const portalRef = useRef(null);
   const overlayRef = useRef(null); // overlay scroll container
   const panelRef = useRef(null);   // the card/panel inside overlay
   const lenisPaused = useRef(false);
+
+  // used to avoid closing when user is scrolling via touch
+  const touchMovedRef = useRef(false);
 
   // create portal root synchronously (client-only)
   if (typeof document !== "undefined" && !portalRef.current) {
@@ -78,8 +83,8 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
       } catch (e) {}
     };
     setVh();
-    window.addEventListener('resize', setVh);
-    window.addEventListener('orientationchange', setVh);
+    window.addEventListener('resize', setVh, { passive: true });
+    window.addEventListener('orientationchange', setVh, { passive: true });
     return () => {
       window.removeEventListener('resize', setVh);
       window.removeEventListener('orientationchange', setVh);
@@ -209,7 +214,7 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
   const remainingTextBlocks = textBlocks.slice(ti);
   const galleryImgClass = "w-full h-[20rem] md:h-[36rem] object-cover rounded-[8px]";
 
-  // --- overlay content (single container holds background and scroll) ---
+  // --- overlay content ---
   const content = (
     <div
       ref={overlayRef}
@@ -217,34 +222,52 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
       aria-modal="true"
       aria-label={project.title || "Case study"}
       className="fixed inset-0 z-50 overflow-y-auto bg-black/80"
-      // Use CSS height fallback via --vh so iOS shows the real visible height:
-      // style includes both the calc(var(--vh)...) fallback and a raw 100dvh for browsers that support it.
       style={{
-        height: 'calc(var(--vh, 1vh) * 100)', // primary fallback (works when we set --vh)
-        maxHeight: '100dvh',                  // use d(h/v) when supported
+        // prefer the JS-set --vh (calc(var(--vh, 1vh) * 100)) but cap at 100dvh where supported
+        height: 'calc(var(--vh, 1vh) * 100)',
+        maxHeight: '100dvh',
         WebkitOverflowScrolling: "touch",
         touchAction: "pan-y",
+        overscrollBehavior: 'contain',
       }}
 
-      // close when clicking outside the panel; clicks inside the panel stopPropagation
-      onClick={(e) => {
-        if (panelRef.current && panelRef.current.contains(e.target)) return;
-        onClose();
-      }}
-
-      // wheel fallback: if native scrolling isn't happening (some edge cases), manually scroll overlay.
+      // Desktop: safe onWheel fallback to ensure wheel/trackpad scrolls overlay when required
       onWheel={(e) => {
         try {
-          if (!overlayRef.current) return;
-          // If overlay can scroll (content taller than container), scroll it by the wheel delta.
           const el = overlayRef.current;
+          if (!el) return;
           const canScroll = el.scrollHeight > el.clientHeight;
           if (canScroll) {
             el.scrollBy({ top: e.deltaY, left: e.deltaX || 0, behavior: 'auto' });
-            // prevent page/other scroll propagation
+            // stop page from scrolling behind
             e.preventDefault();
           }
         } catch (err) {}
+      }}
+
+      // Click handler for mouse click/tap-end (desktop & quick taps)
+      onClick={(e) => {
+        // if click/tap target is inside the panel, ignore
+        if (panelRef.current && panelRef.current.contains(e.target)) return;
+        // If this was a touch-driven scroll (user moved), don't treat it as a tap.
+        if (touchMovedRef.current) {
+          // reset for next interaction
+          touchMovedRef.current = false;
+          return;
+        }
+        onClose();
+      }}
+
+      // Track touch movement to avoid closing when user scrolls (mobile)
+      onTouchStart={() => { touchMovedRef.current = false; }}
+      onTouchMove={() => { touchMovedRef.current = true; }}
+      onTouchEnd={(e) => {
+        // If user tapped without moving, check if target is outside panel and then close.
+        if (!touchMovedRef.current) {
+          if (panelRef.current && panelRef.current.contains(e.target)) return;
+          onClose();
+        }
+        touchMovedRef.current = false;
       }}
     >
       {/* Inline font loader */}
