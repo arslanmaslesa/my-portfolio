@@ -348,7 +348,7 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
       />
 
       {/* Backdrop */}
-      <div className="fixed h-screen w-screen inset-0 bg-black/80 pointer-events-auto" aria-hidden />
+      <div className="fixed h-full w-full inset-0 bg-black/80 pointer-events-auto" aria-hidden />
 
       {/* Panel flow */}
       <div className="relative z-40">
