@@ -322,7 +322,7 @@ export default function Home() {
 
         {/* Skills Section inserted directly after ProjectSection */}
         {/* Pass lenisInstance so SkillsSection can subscribe to Lenis scroll events */}
-        <SkillsSection lenis={lenisInstance} />
+        {/*<SkillsSection lenis={lenisInstance} />*/}
 
         <AboutSection
           aboutTexts={aboutTexts}

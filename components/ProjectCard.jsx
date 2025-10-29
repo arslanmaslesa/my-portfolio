@@ -10,6 +10,16 @@ const poppins = Poppins({
 
 const OFFSCREEN = { x: -9999, y: -9999 };
 
+// Basic Safari detection (desktop & iOS)
+const detectSafari = () => {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  // exclude Chrome on iOS (CriOS), Firefox iOS (FxiOS), etc.
+  const isSafari = /Safari/.test(ua) && !/Chrome|Chromium|CriOS|FxiOS|OPR|Edg/.test(ua);
+  const vendorIsApple = navigator.vendor && navigator.vendor.indexOf('Apple') > -1;
+  return isSafari || !!vendorIsApple;
+};
+
 const ProjectCard = ({
   project = null,
   image,
@@ -25,6 +35,7 @@ const ProjectCard = ({
   const [muted, setMuted] = useState(true);
   const [captionsOn, setCaptionsOn] = useState(false);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
+  const [isSafari, setIsSafari] = useState(false);
   const videoRef = useRef(null);
   const containerRef = useRef(null);
 
@@ -54,6 +65,7 @@ const ProjectCard = ({
       typeof window !== "undefined" &&
       ("ontouchstart" in window || navigator.maxTouchPoints > 0)
     );
+    setIsSafari(detectSafari());
   }, []);
 
   // video play/pause on hover (unchanged)
@@ -217,26 +229,40 @@ const ProjectCard = ({
         style={{ willChange: 'transform, opacity' }}
       />
 
-      {/* Video (disabled on touch devices) */}
+      {/* Video (disabled on touch devices)
+          - On Safari, render an <img> using the video URL instead of <video>
+          - On other browsers, render the <video> as before
+      */}
       {(video || projectData.video) && !isTouchDevice && (
         <div
           className={`absolute inset-0 w-full h-full transition-opacity duration-700 ease-in-out ${hovered ? 'opacity-100' : 'opacity-0'}`}
           style={{ willChange: 'opacity' }}
           aria-hidden={!hovered}
         >
-          <video
-            ref={videoRef}
-            src={video || projectData.video}
-            loop
-            playsInline
-            muted={muted}
-            preload="metadata"
-            className="w-full h-full object-cover"
-          >
-            {(subtitles || projectData.subtitles) && (
-              <track src={subtitles || projectData.subtitles} kind="subtitles" srcLang="en" label="English" />
-            )}
-          </video>
+          {isSafari ? (
+            // Safari: render an <img> for the hover preview (uses the video URL as src)
+            <img
+              src={video || projectData.video}
+              alt={title || projectData.title}
+              className="w-full h-full object-cover"
+              style={{ display: 'block' }}
+            />
+          ) : (
+            // Non-Safari: render actual <video>
+            <video
+              ref={videoRef}
+              src={video || projectData.video}
+              loop
+              playsInline
+              muted={muted}
+              preload="metadata"
+              className="w-full h-full object-cover"
+            >
+              {(subtitles || projectData.subtitles) && (
+                <track src={subtitles || projectData.subtitles} kind="subtitles" srcLang="en" label="English" />
+              )}
+            </video>
+          )}
 
           <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: "inset 0 0 200px rgba(0,0,0,0.1)", borderRadius: "12px" }} />
 

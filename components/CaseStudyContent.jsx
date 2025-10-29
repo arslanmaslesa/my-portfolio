@@ -1,16 +1,115 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 /*
-  CASE STUDY CONTENT (presentation only)
-  - Now supports multiple solutions: project.solutions = [{ title, description, ... }, ...]
-  - Each solution is treated as a separate text block in the alternating layout
-  - Fix: map solution.description -> body so descriptions from your data render correctly
+  CaseStudyContent with improved Media component for Safari compatibility.
+  - Handles mp4 videos and images everywhere (hero, gallery, pairs, doubles, singles).
+  - Adds webkit-playsinline, playsInline, crossOrigin, <source type="video/mp4">, and fallbacks.
+  - If video fails to play on Safari, component falls back to poster/img.
 */
 
+const isVideoUrl = (url) =>
+  typeof url === 'string' && /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(url || '');
+
+// Best-effort codec string for canPlayType checks.
+const mp4Codec = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
+
+const Media = ({ src, alt = '', className = '', showControls = false, poster = undefined, ...rest }) => {
+  const [failed, setFailed] = useState(false);
+  const [canPlay, setCanPlay] = useState(true);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    setFailed(false);
+    setCanPlay(true);
+  }, [src]);
+
+  // Only run canPlayType in browser
+  useEffect(() => {
+    if (!isVideoUrl(src)) return;
+    try {
+      const v = document.createElement('video');
+      // If browser explicitly says it can't play mp4 codec, mark as cannot play.
+      const support = v.canPlayType(mp4Codec);
+      if (!support || support === '') {
+        setCanPlay(false);
+      } else {
+        setCanPlay(true);
+      }
+    } catch (e) {
+      setCanPlay(true);
+    }
+  }, [src]);
+
+  useEffect(() => {
+    // Safari needs the webkit-playsinline attribute set directly on the element for iOS.
+    if (ref.current && typeof ref.current.setAttribute === 'function') {
+      try {
+        ref.current.setAttribute('webkit-playsinline', 'true');
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [ref.current]);
+
+  if (!src || typeof src !== 'string') return null;
+
+  // If the source is a video and browser says it can likely play it, render <video>.
+  if (isVideoUrl(src) && canPlay && !failed) {
+    // When showControls is true we enable controls and unmute; otherwise autoplay muted loop playsInline for demos.
+    const controls = !!showControls;
+    const muted = !controls;
+    const autoPlay = !controls;
+    const loop = !controls;
+
+    return (
+      <video
+        ref={ref}
+        className={className}
+        preload="metadata"
+        controls={controls}
+        muted={muted}
+        autoPlay={autoPlay}
+        loop={loop}
+        playsInline
+        // crossOrigin can help if your server serves CORs and decoding is sensitive.
+        crossOrigin="anonymous"
+        poster={poster}
+        aria-label={alt}
+        onError={() => setFailed(true)}
+        onAbort={() => setFailed(true)}
+        {...rest}
+      >
+        {/* Use a <source> with type; some browsers prefer the explicit source/type pairing */}
+        <source src={src} type="video/mp4" />
+        {/* generic fallback */}
+        Your browser does not support the video tag.
+      </video>
+    );
+  }
+
+  // Fallback to poster image (if provided) or a normal <img>.
+  const fallbackSrc = poster || (isVideoUrl(src) ? src.replace(/\.(mp4|webm|mov|m4v)(\?.*)?$/i, '.png') : src);
+
+  return (
+    <img
+      src={fallbackSrc}
+      alt={alt}
+      loading="lazy"
+      className={className}
+      onError={() => {
+        // If poster also doesn't load, hide element gracefully.
+        setFailed(true);
+      }}
+      {...rest}
+    />
+  );
+};
+
 const CaseStudyContent = ({ project = {}, onClose = () => {}, panelRef }) => {
-  const hero = project.image || project.video || project.heroColor || null;
+  // Prefer image2 (hero image/video), then image, then video; keep heroColor fallback.
+  const hero = project.image2 || project.image || project.video || project.heroColor || null;
   const categories = project.categories || project.tags || [];
 
   const projectInfo = project.info || [
@@ -55,7 +154,6 @@ const CaseStudyContent = ({ project = {}, onClose = () => {}, panelRef }) => {
     ? project.solutions.map((s, idx) => ({
         key: `solution-${idx}`,
         title: s.title || `Solution ${idx + 1}`,
-        // <-- IMPORTANT: prefer s.description (your data uses `description`), fallback to s.body
         body:
           s.description ||
           s.body ||
@@ -162,6 +260,9 @@ const CaseStudyContent = ({ project = {}, onClose = () => {}, panelRef }) => {
   const galleryImgClass =
     'w-full h-[20rem] md:h-[36rem] object-cover rounded-[8px]';
 
+  // Helper to pass showControls based on project-wide flag
+  const showControls = !!project.showSoundButton;
+
   return (
     <article
       ref={panelRef}
@@ -230,12 +331,14 @@ const CaseStudyContent = ({ project = {}, onClose = () => {}, panelRef }) => {
       {/* HERO */}
       {hero && (
         <section>
-          {project.image2 ? (
+          {project.image2 || project.video || project.image ? (
             <div className="overflow-hidden mb-6 rounded-[8px]">
-              <img
-                src={project.image2}
+              <Media
+                src={project.image2 || project.video || project.image}
                 alt={project.title || 'hero'}
                 className="w-full h-[29rem] md:h-[36rem] object-cover rounded-[8px]"
+                showControls={showControls}
+                poster={project.poster}
               />
             </div>
           ) : (
@@ -291,11 +394,12 @@ const CaseStudyContent = ({ project = {}, onClose = () => {}, panelRef }) => {
             if (block.type === 'single') {
               return (
                 <div key={idx} className="w-full">
-                  <img
+                  <Media
                     src={block.img}
                     alt={`${project.title || 'project'} - img ${idx + 1}`}
-                    loading="lazy"
+                    showControls={showControls}
                     className={galleryImgClass}
+                    poster={project.poster}
                   />
                 </div>
               );
@@ -309,23 +413,21 @@ const CaseStudyContent = ({ project = {}, onClose = () => {}, panelRef }) => {
                     className="grid grid-cols-1 md:grid-cols-3 gap-3 items-stretch"
                   >
                     <div className="order-1 md:order-1 md:col-span-2">
-                      <img
+                      <Media
                         src={block.imgs[0]}
-                        alt={`${project.title || 'project'} - img ${
-                          idx + 1
-                        }-a`}
-                        loading="lazy"
+                        alt={`${project.title || 'project'} - img ${idx + 1}-a`}
+                        showControls={showControls}
                         className={galleryImgClass}
+                        poster={project.poster}
                       />
                     </div>
                     <div className="order-2 md:order-2 md:col-span-1">
-                      <img
+                      <Media
                         src={block.imgs[1]}
-                        alt={`${project.title || 'project'} - img ${
-                          idx + 1
-                        }-b`}
-                        loading="lazy"
+                        alt={`${project.title || 'project'} - img ${idx + 1}-b`}
+                        showControls={showControls}
                         className={galleryImgClass}
+                        poster={project.poster}
                       />
                     </div>
                   </div>
@@ -338,23 +440,21 @@ const CaseStudyContent = ({ project = {}, onClose = () => {}, panelRef }) => {
                   className="grid grid-cols-1 md:grid-cols-3 gap-3 items-stretch"
                 >
                   <div className="order-1 md:order-1 md:col-span-1">
-                    <img
+                    <Media
                       src={block.imgs[0]}
-                      alt={`${project.title || 'project'} - img ${
-                        idx + 1
-                      }-a`}
-                      loading="lazy"
+                      alt={`${project.title || 'project'} - img ${idx + 1}-a`}
+                      showControls={showControls}
                       className={galleryImgClass}
+                      poster={project.poster}
                     />
                   </div>
                   <div className="order-2 md:order-2 md:col-span-2">
-                    <img
+                    <Media
                       src={block.imgs[1]}
-                      alt={`${project.title || 'project'} - img ${
-                        idx + 1
-                      }-b`}
-                      loading="lazy"
+                      alt={`${project.title || 'project'} - img ${idx + 1}-b`}
+                      showControls={showControls}
                       className={galleryImgClass}
+                      poster={project.poster}
                     />
                   </div>
                 </div>
@@ -379,26 +479,24 @@ const CaseStudyContent = ({ project = {}, onClose = () => {}, panelRef }) => {
                     </div>
 
                     <div className="order-2 md:order-2 md:col-span-2">
-                      <img
+                      <Media
                         src={block.img}
-                        alt={`${project.title || 'project'} - paired img ${
-                          idx + 1
-                        }`}
-                        loading="lazy"
+                        alt={`${project.title || 'project'} - paired img ${idx + 1}`}
+                        showControls={showControls}
                         className={galleryImgClass}
+                        poster={project.poster}
                       />
                     </div>
                   </>
                 ) : (
                   <>
                     <div className="order-1 md:order-1 md:col-span-2">
-                      <img
+                      <Media
                         src={block.img}
-                        alt={`${project.title || 'project'} - paired img ${
-                          idx + 1
-                        }`}
-                        loading="lazy"
+                        alt={`${project.title || 'project'} - paired img ${idx + 1}`}
+                        showControls={showControls}
                         className={galleryImgClass}
+                        poster={project.poster}
                       />
                     </div>
 
@@ -428,6 +526,20 @@ const CaseStudyContent = ({ project = {}, onClose = () => {}, panelRef }) => {
             </div>
           )}
         </section>
+
+        {project.demoVideo && (
+  <section>
+    <div className="overflow-hidden rounded-[8px]">
+      <video
+        src={project.demoVideo}
+        controls
+        className="w-full md:h-[36rem] object-cover rounded-[8px]"
+        poster={project.poster}
+      />
+    </div>
+  </section>
+)}
+
       </div>
     </article>
   );

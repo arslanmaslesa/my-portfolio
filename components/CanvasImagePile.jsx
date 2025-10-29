@@ -3,7 +3,7 @@
 import React, { useEffect, useRef } from 'react';
 
 // Full set of 36 images; component uses up to MOBILE_COUNT on small screens.
-const DEFAULT_IMAGES = Array.from({ length: 36 }).map((_, i) => `/interest${(i % 12) + 1}.png`);
+const DEFAULT_IMAGES = Array.from({ length: 36 }).map((_, i) => `/about/interest${(i % 12) + 1}.png`);
 const MOBILE_BREAKPOINT = 768; // px
 const MOBILE_COUNT = 12; // use 12 images on mobile/smaller screens
 
