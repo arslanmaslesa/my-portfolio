@@ -9,7 +9,7 @@ const links = [
   { id: 'contact', label: 'Contact' },
 ];
 
-export default function Navbar({ lenis, introDone = false }) {
+export default function Navbar({ lenis, introDone = true }) {
   const wrapperRef = useRef(null);
   const navRef = useRef(null);
   const navItemRefs = useRef({});
@@ -20,13 +20,35 @@ export default function Navbar({ lenis, introDone = false }) {
   const targetRef = useRef({ left: 0, top: 0, width: 0, height: 0, opacity: 0 });
   const rafRef = useRef(null);
 
-  // visibility and locks
-  const [visible, setVisible] = useState(false); // default hidden so intro can control initial state
+  // visibility
+  // Start hidden until introDone === true
+  const [visible, setVisible] = useState(Boolean(introDone));
   const lastYRef = useRef(typeof window !== 'undefined' ? (window.pageYOffset || window.scrollY || 0) : 0);
   const tickingRef = useRef(false);
 
-  // tuning
-  const HIDE_BUFFER_PX = 24;
+  // Keep a ref mirror of introDone so handlers can check synchronously
+  const introDoneRef = useRef(Boolean(introDone));
+  useEffect(() => {
+    // when introDone transitions to true, show navbar and reset lastY to current scroll
+    if (!introDoneRef.current && introDone) {
+      introDoneRef.current = true;
+      setVisible(true);
+      lastYRef.current = typeof window !== 'undefined' ? (window.pageYOffset || window.scrollY || 0) : 0;
+
+      // small safety: clear click-guard and programmatic locks so scroll logic works normally
+      clickGuardRef.current = false;
+      clearProgrammaticLock();
+    } else {
+      // keep the ref in sync for future checks
+      introDoneRef.current = Boolean(introDone);
+      if (!introDone) {
+        // if intro re-starts / not done, hide navbar
+        setVisible(false);
+      }
+    }
+  }, [introDone]);
+
+  const HIDE_BUFFER_PX = 12;
   const TRANSITION_MS = 420;
   const [hiddenOffset, setHiddenOffset] = useState(160);
 
@@ -34,12 +56,9 @@ export default function Navbar({ lenis, introDone = false }) {
   const clickGuardRef = useRef(false);
 
   // programmatic lock: prevents scroll-based activeId changes while a nav-initiated scroll is in progress
-  const programmaticLockRef = useRef(null);
+  const programmaticLockRef = useRef(null); // stores id string or null
   const programmaticTimerRef = useRef(null);
   const PROGRAMMATIC_LOCK_MS = 950;
-
-  // intro lock: while true the navbar stays hidden and ignores manual scroll
-  const introLockRef = useRef(!introDone);
 
   // manual-input detection (to decide if a scroll is manual)
   const userInputTimestampRef = useRef(0);
@@ -101,7 +120,7 @@ export default function Navbar({ lenis, introDone = false }) {
 
   const updateTarget = (forId) => {
     const t = computeTargetForId(forId || activeId);
-    // avoid tiny restarts if target hasn't moved meaningfully
+    // small optimization: avoid restarting animation if target hasn't moved meaningfully
     const prev = targetRef.current;
     const delta = Math.hypot(prev.left - t.left, prev.top - t.top, prev.width - t.width, prev.height - t.height);
     if (delta < 0.5 && Math.abs(prev.opacity - t.opacity) < 0.02) return;
@@ -146,6 +165,7 @@ export default function Navbar({ lenis, introDone = false }) {
       return;
     }
 
+    // prefer lenis if provided
     if (lenis && typeof lenis.scrollTo === 'function') {
       lenis.scrollTo(el);
     } else {
@@ -160,7 +180,7 @@ export default function Navbar({ lenis, introDone = false }) {
     const getSections = () => sectionIds.map((id) => document.getElementById(id)).filter(Boolean);
 
     const computeActive = () => {
-      // if programmatic lock is set, do not change activeId
+      // if programmatic lock is set, do not change activeId — keep the clicked id
       if (programmaticLockRef.current) return;
 
       const sections = getSections();
@@ -227,6 +247,7 @@ export default function Navbar({ lenis, introDone = false }) {
       window.removeEventListener('resize', onScroll);
       clearTimeout(initial);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
 
   // ---------------- layout / box recompute ----------------
@@ -245,6 +266,7 @@ export default function Navbar({ lenis, introDone = false }) {
       stopAnimation();
       window.removeEventListener('resize', onWinResize);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ---------------- compute hidden offset ----------------
@@ -267,48 +289,20 @@ export default function Navbar({ lenis, introDone = false }) {
     };
   }, []);
 
-  // ---------------- handle introDone (initially locked hidden; when true push in) ----------------
-  useEffect(() => {
-    // if introDone is false -> lock and hide
-    if (!introDone) {
-      introLockRef.current = true;
-      // hide immediately (no transition jump: keep translate off-screen)
-      setVisible(false);
-      // keep click/programmatic guards set while intro runs to avoid any accidental shows
-      clickGuardRef.current = true;
-      clearProgrammaticLock();
-    } else {
-      // when intro finishes, release the lock and push in (show)
-      introLockRef.current = false;
-      clickGuardRef.current = false;
-      // show (this will animate in using the existing transition)
-      setVisible(true);
-      // give a small programmatic lock to avoid section-detection race while it animates in
-      setProgrammaticLock('intro-push');
-      // optionally clear that early after a short time (keeps box steady)
-      if (programmaticTimerRef.current) clearTimeout(programmaticTimerRef.current);
-      programmaticTimerRef.current = setTimeout(() => {
-        programmaticLockRef.current = null;
-        programmaticTimerRef.current = null;
-      }, Math.max(PROGRAMMATIC_LOCK_MS, 420));
-    }
-    // we intentionally do not include other refs in deps so this effect runs only when introDone changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [introDone]);
-
-  // ---------------- visibility: only manual downward scroll hides, clicks don't; intro lock overrides ----------------
+  // ---------------- visibility: only manual downward scroll hides, clicks don't ----------------
   useEffect(() => {
     const now = () => Date.now();
 
     const handleVisibilityY = (y) => {
-      // if intro lock is active, keep hidden and ignore
-      if (introLockRef.current) {
+      // If intro hasn't finished, keep it hidden and do nothing
+      if (!introDoneRef.current) {
+        // keep nav hidden while intro runs
         if (visible) setVisible(false);
         lastYRef.current = y;
         return;
       }
 
-      // if clickGuard is set, keep visible until user manually interacts
+      // click-guard prevents hiding while user intended the click
       if (clickGuardRef.current) {
         if (!visible) setVisible(true);
         lastYRef.current = y;
@@ -350,7 +344,7 @@ export default function Navbar({ lenis, introDone = false }) {
       });
     };
 
-    const onUserInput = () => {
+    const onUserInput = (ev) => {
       // any real input means manual; record timestamp and clear click/programmatic guards
       userInputTimestampRef.current = Date.now();
       if (clickGuardRef.current) clickGuardRef.current = false;
@@ -362,7 +356,7 @@ export default function Navbar({ lenis, introDone = false }) {
     window.addEventListener('touchstart', onUserInput, { passive: true });
     window.addEventListener('keydown', onUserInput, { passive: true });
 
-    // Lenis: treat its emitted events as scrolls but manual detection still uses real user input events
+    // Lenis: treat its scroll events as scrolls, but manual detection still uses userInputTimestamp
     let lenisOff = null;
     if (lenis && typeof lenis.on === 'function') {
       const handler = (e) => {
@@ -425,7 +419,7 @@ export default function Navbar({ lenis, introDone = false }) {
 
       <div
         ref={wrapperRef}
-        className="fixed top-6 left-1/2 flex justify-center z-50 pointer-events-auto"
+        className="absolute top-6 left-1/2 flex justify-center z-20 pointer-events-auto"
         style={{
           transform: visible
             ? 'translateX(-50%) translateY(0px)'
@@ -434,7 +428,7 @@ export default function Navbar({ lenis, introDone = false }) {
           willChange: 'transform',
           fontFamily: "'Poppins', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue'",
         }}
-        aria-hidden={false}
+        aria-hidden={!visible}
       >
         <nav
           ref={navRef}

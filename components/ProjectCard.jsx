@@ -355,7 +355,7 @@ const ProjectCard = ({
       {/* Coming soon label */}
       {isLocked && !isTouchDevice && labelVisible && !isOverlayOpen() && (
         <div
-          className={`${poppins.className} pointer-events-none fixed z-[9999] select-none`}
+          className={`${poppins.className} pointer-events-none fixed z-[19] select-none`}
           style={{
             left: `${renderPos.x}px`,
             top: `${renderPos.y}px`,

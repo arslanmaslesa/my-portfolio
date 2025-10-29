@@ -279,7 +279,7 @@ export default function Home() {
       <main className="bg-white min-h-[300vh] relative">
         <Loader progress={progress} done={isLoaded} />
 
-        <div className="fixed top-0 left-0 w-full z-[9999]">
+        <div className="fixed top-0 left-0 w-full z-[70]">
           <Navbar 
           lenis={lenisInstance}
           introDone={intro.done} />

@@ -213,7 +213,7 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
       role="dialog"
       aria-modal="true"
       aria-label={project.title || 'Case study'}
-      className="fixed inset-0 z-50 bg-black/80"
+      className="fixed inset-0 z-80 bg-black/80"
       style={{
         // use the --vh fallback variable previously set for consistent mobile height
         height: 'calc(var(--vh, 1vh) * 100)',
@@ -280,7 +280,7 @@ const CaseStudyOverlay = ({ project = {}, onClose, lenis = null }) => {
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" />
 
       {/* Panel flow: delegate all content/markup/styling to CaseStudyContent */}
-      <div className="relative z-40">
+      <div className="relative z-80">
         <div className="mx-6 my-6 md:mx-28" style={{ marginBottom: '3rem' }}>
           <CaseStudyContent project={project} onClose={onClose} panelRef={panelRef} />
         </div>
