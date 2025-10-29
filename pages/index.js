@@ -280,7 +280,9 @@ export default function Home() {
         <Loader progress={progress} done={isLoaded} />
 
         <div className="fixed top-0 left-0 w-full z-[9999]">
-          <Navbar />
+          <Navbar 
+          lenis={lenisInstance}
+          introDone={intro.done} />
         </div>
 
         <HeroVideo
@@ -318,20 +320,26 @@ export default function Home() {
           </div>
         </div>
 
-        <ProjectSection />
+        <section id="work">
+  <ProjectSection />
+</section>
 
         {/* Skills Section inserted directly after ProjectSection */}
         {/* Pass lenisInstance so SkillsSection can subscribe to Lenis scroll events */}
         {/*<SkillsSection lenis={lenisInstance} />*/}
 
-        <AboutSection
-          aboutTexts={aboutTexts}
-          aboutRefs={aboutRefs}
-          aboutOffsets={aboutOffsets}
-          ui={ui}
-        />
+        <section id="about">
+  <AboutSection
+    aboutTexts={aboutTexts}
+    aboutRefs={aboutRefs}
+    aboutOffsets={aboutOffsets}
+    ui={ui}
+  />
+</section>
 
-        <ContactFooter />
+        <section id="contact">
+  <ContactFooter />
+</section>
       </main>
     </CaseStudyProvider>
   );

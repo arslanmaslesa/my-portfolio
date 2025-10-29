@@ -10,7 +10,7 @@ const ProjectSection = ({ projects = PROJECTS }) => {
   const { openCaseStudy } = useCaseStudy();
 
   return (
-    <section className="px-3 2xl:px-6 pb-3 2xl:pb-6">
+    <section className="px-3 2xl:px-6 py-3 2xl:py-6">
       <div className="grid gap-3 2xl:gap-6 grid-cols-1 md:grid-cols-2">
         {projects.map((p) => (
           <div key={p.id} className={cn('w-full', itemHeight, p.featured && 'md:col-span-2')}>
